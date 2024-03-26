@@ -35,26 +35,22 @@ library QueryProcessor {
     /**
      * @dev Returns the value for `variable` at the indexed sample.
      */
-    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index)
-        external
-        view
-        returns (uint256)
-    {
+    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index) external view returns (uint256) {
         Observation memory sample = pair.observation(index);
         if (sample.timestamp == 0) revert OracleNotInitialized();
 
-        int256 rawInstantValue =  sample.instant(variable);
+        int256 rawInstantValue = sample.instant(variable);
         return LogCompression.fromLowResLog(rawInstantValue);
     }
 
     /**
      * @dev Returns the time average weighted price corresponding to `query`.
      */
-    function getTimeWeightedAverage(
-        ReservoirPair pair,
-        OracleAverageQuery memory query,
-        uint16 latestIndex
-    ) external view returns (uint256) {
+    function getTimeWeightedAverage(ReservoirPair pair, OracleAverageQuery memory query, uint16 latestIndex)
+        external
+        view
+        returns (uint256)
+    {
         if (query.secs == 0) revert BadSecs();
 
         int256 beginAccumulator = getPastAccumulator(pair, query.variable, latestIndex, query.ago + query.secs);
@@ -79,12 +75,11 @@ library QueryProcessor {
      * timestamp is stored every two minutes), it is estimated by performing linear interpolation using the closest
      * values. This process is guaranteed to complete performing at most 10 storage reads.
      */
-    function getPastAccumulator(
-        ReservoirPair pair,
-        Variable variable,
-        uint16 latestIndex,
-        uint256 ago
-    ) public view returns (int256) {
+    function getPastAccumulator(ReservoirPair pair, Variable variable, uint16 latestIndex, uint256 ago)
+        public
+        view
+        returns (int256)
+    {
         // solhint-disable not-rely-on-time
         // `ago` must not be before the epoch.
         if (block.timestamp < ago) revert InvalidSeconds();
@@ -133,7 +128,8 @@ library QueryProcessor {
             }
 
             // Perform binary search to find nearest samples to the desired timestamp.
-            (Observation memory prev, Observation memory next) = findNearestSample(pair, lookUpTime, oldestIndex, bufferLength);
+            (Observation memory prev, Observation memory next) =
+                findNearestSample(pair, lookUpTime, oldestIndex, bufferLength);
 
             // `next`'s timestamp is guaranteed to be larger than `prev`'s, so we can skip checked arithmetic.
             uint256 samplesTimeDiff = next.timestamp - prev.timestamp;
@@ -163,12 +159,11 @@ library QueryProcessor {
      * Assumes `lookUpDate` is greater or equal than the timestamp of the oldest sample, and less or equal than the
      * timestamp of the latest sample.
      */
-    function findNearestSample(
-        ReservoirPair pair,
-        uint256 lookUpDate,
-        uint16 offset,
-        uint16 length
-    ) public view returns (Observation memory prev, Observation memory next) {
+    function findNearestSample(ReservoirPair pair, uint256 lookUpDate, uint16 offset, uint16 length)
+        public
+        view
+        returns (Observation memory prev, Observation memory next)
+    {
         // We're going to perform a binary search in the circular buffer, which requires it to be sorted. To achieve
         // this, we offset all buffer accesses by `offset`, making the first element the oldest one.
 
@@ -211,6 +206,8 @@ library QueryProcessor {
         }
 
         // In case we reach here, it means we didn't find exactly the sample we where looking for.
-        return sampleTimestamp < lookUpDate ? (sample, pair.observation(mid.next())) : (pair.observation(mid.prev()), sample);
+        return sampleTimestamp < lookUpDate
+            ? (sample, pair.observation(mid.next()))
+            : (pair.observation(mid.prev()), sample);
     }
 }
