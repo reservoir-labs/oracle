@@ -1,6 +1,28 @@
 [profile.default]
-src = "src"
-out = "out"
-libs = ["lib"]
+solc = "0.8.23"
+#via_ir = true
+bytecode_hash = "ipfs"
+optimizer_runs = 1_000_000
+libs = ['lib']
+remappings = [
+    "@openzeppelin/=lib/openzeppelin-contracts/contracts/",
+]
+match_path = "test/unit/*.sol"
+verbosity = 3
+fs_permissions = [
+    { access = "write", path = "./script/optimized-deployer-meta" },
+    { access = "write", path = "./script/unoptimized-deployer-meta" },
+]
+ignored_error_codes = []
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+[profile.integration]
+match_path = "test/integration/*.sol"
+
+[fmt]
+bracket_spacing   = true
+wrap_comments     = false
+number_underscore = "thousands"
+int_types         = "long"
+
+[profile.script]
+optimizer_runs = 1_000_000
