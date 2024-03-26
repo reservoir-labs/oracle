@@ -11,17 +11,15 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
+pragma solidity ^0.8.0;
 
-pragma solidity ^0.7.0;
-pragma experimental ABIEncoderV2;
+import { LogCompression } from "amm-core/libraries/LogCompression.sol";
+import { Buffer } from "amm-core/libraries/Buffer.sol";
+import { ReservoirPair, Observation } from "amm-core/ReservoirPair.sol";
 
-import "@balancer-labs/v2-interfaces/contracts/solidity-utils/helpers/BalancerErrors.sol";
-import "@balancer-labs/v2-interfaces/contracts/pool-utils/IPriceOracle.sol";
-
-import "@balancer-labs/v2-solidity-utils/contracts/helpers/LogCompression.sol";
-
-import "./Buffer.sol";
-import "./Samples.sol";
+import { IPriceOracle, Variable, OracleAverageQuery, OracleAccumulatorQuery } from "src/interfaces/IPriceOracle.sol";
+import { BadVariableRequest, OracleNotInitialized, InvalidSeconds, QueryTooOld, BadSecs } from "src/Errors.sol";
+import { Samples } from "src/libraries/Samples.sol";
 
 /**
  * @dev Auxiliary library for PoolPriceOracle, offloading most of the query code to reduce bytecode size by using this
@@ -30,22 +28,22 @@ import "./Samples.sol";
  * it is worth it.
  */
 library QueryProcessor {
-    using Buffer for uint256;
-    using Samples for bytes32;
+    using Buffer for uint16;
     using LogCompression for int256;
+    using Samples for Observation;
 
     /**
      * @dev Returns the value for `variable` at the indexed sample.
      */
-    function getInstantValue(
-        mapping(uint256 => bytes32) storage samples,
-        IPriceOracle.Variable variable,
-        uint256 index
-    ) external view returns (uint256) {
-        bytes32 sample = samples[index];
-        _require(sample.timestamp() > 0, Errors.ORACLE_NOT_INITIALIZED);
+    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index)
+        external
+        view
+        returns (uint256)
+    {
+        Observation memory sample = pair.observation(index);
+        if (sample.timestamp == 0) revert OracleNotInitialized();
 
-        int256 rawInstantValue = sample.instant(variable);
+        int256 rawInstantValue =  sample.instant(variable);
         return LogCompression.fromLowResLog(rawInstantValue);
     }
 
@@ -53,14 +51,14 @@ library QueryProcessor {
      * @dev Returns the time average weighted price corresponding to `query`.
      */
     function getTimeWeightedAverage(
-        mapping(uint256 => bytes32) storage samples,
-        IPriceOracle.OracleAverageQuery memory query,
-        uint256 latestIndex
+        ReservoirPair pair,
+        OracleAverageQuery memory query,
+        uint16 latestIndex
     ) external view returns (uint256) {
-        _require(query.secs != 0, Errors.ORACLE_BAD_SECS);
+        if (query.secs == 0) revert BadSecs();
 
-        int256 beginAccumulator = getPastAccumulator(samples, query.variable, latestIndex, query.ago + query.secs);
-        int256 endAccumulator = getPastAccumulator(samples, query.variable, latestIndex, query.ago);
+        int256 beginAccumulator = getPastAccumulator(pair, query.variable, latestIndex, query.ago + query.secs);
+        int256 endAccumulator = getPastAccumulator(pair, query.variable, latestIndex, query.ago);
         return LogCompression.fromLowResLog((endAccumulator - beginAccumulator) / int256(query.secs));
     }
 
@@ -82,21 +80,21 @@ library QueryProcessor {
      * values. This process is guaranteed to complete performing at most 10 storage reads.
      */
     function getPastAccumulator(
-        mapping(uint256 => bytes32) storage samples,
-        IPriceOracle.Variable variable,
-        uint256 latestIndex,
+        ReservoirPair pair,
+        Variable variable,
+        uint16 latestIndex,
         uint256 ago
     ) public view returns (int256) {
         // solhint-disable not-rely-on-time
         // `ago` must not be before the epoch.
-        _require(block.timestamp >= ago, Errors.ORACLE_INVALID_SECONDS_QUERY);
+        if (block.timestamp < ago) revert InvalidSeconds();
         uint256 lookUpTime = block.timestamp - ago;
 
-        bytes32 latestSample = samples[latestIndex];
-        uint256 latestTimestamp = latestSample.timestamp();
+        Observation memory latestSample = pair.observation(latestIndex);
+        uint256 latestTimestamp = latestSample.timestamp;
 
         // The latest sample only has a non-zero timestamp if no data was ever processed and stored in the buffer.
-        _require(latestTimestamp > 0, Errors.ORACLE_NOT_INITIALIZED);
+        if (latestTimestamp == 0) revert OracleNotInitialized();
 
         if (latestTimestamp <= lookUpTime) {
             // The accumulator at times ahead of the latest one are computed by extrapolating the latest data. This is
@@ -111,12 +109,12 @@ library QueryProcessor {
             // sample as well.
 
             // Since we use a circular buffer, the oldest sample is simply the next one.
-            uint256 bufferLength;
-            uint256 oldestIndex = latestIndex.next();
+            uint16 bufferLength;
+            uint16 oldestIndex = latestIndex.next();
             {
                 // Local scope used to prevent stack-too-deep errors.
-                bytes32 oldestSample = samples[oldestIndex];
-                uint256 oldestTimestamp = oldestSample.timestamp();
+                Observation memory oldestSample = pair.observation(oldestIndex);
+                uint256 oldestTimestamp = oldestSample.timestamp;
 
                 if (oldestTimestamp > 0) {
                     // If the oldest timestamp is not zero, it means the buffer was fully initialized.
@@ -127,18 +125,18 @@ library QueryProcessor {
                     // and the length the number of samples.
                     bufferLength = oldestIndex; // Equal to latestIndex.next()
                     oldestIndex = 0;
-                    oldestTimestamp = samples[0].timestamp();
+                    oldestTimestamp = pair.observation(0).timestamp;
                 }
 
                 // Finally check that the look up time is not previous to the oldest timestamp.
-                _require(oldestTimestamp <= lookUpTime, Errors.ORACLE_QUERY_TOO_OLD);
+                if (oldestTimestamp > lookUpTime) revert QueryTooOld();
             }
 
             // Perform binary search to find nearest samples to the desired timestamp.
-            (bytes32 prev, bytes32 next) = findNearestSample(samples, lookUpTime, oldestIndex, bufferLength);
+            (Observation memory prev, Observation memory next) = findNearestSample(pair, lookUpTime, oldestIndex, bufferLength);
 
             // `next`'s timestamp is guaranteed to be larger than `prev`'s, so we can skip checked arithmetic.
-            uint256 samplesTimeDiff = next.timestamp() - prev.timestamp();
+            uint256 samplesTimeDiff = next.timestamp - prev.timestamp;
 
             if (samplesTimeDiff > 0) {
                 // We estimate the accumulator at the requested look up time by interpolating linearly between the
@@ -147,7 +145,7 @@ library QueryProcessor {
                 // We can use unchecked arithmetic since the accumulators can be represented in 53 bits, and timestamps
                 // in 31 bits.
                 int256 samplesAccDiff = next.accumulator(variable) - prev.accumulator(variable);
-                uint256 elapsed = lookUpTime - prev.timestamp();
+                uint256 elapsed = lookUpTime - prev.timestamp;
                 return prev.accumulator(variable) + ((samplesAccDiff * int256(elapsed)) / int256(samplesTimeDiff));
             } else {
                 // Rarely, one of the samples will have the exact requested look up time, which is indicated by `prev`
@@ -166,35 +164,35 @@ library QueryProcessor {
      * timestamp of the latest sample.
      */
     function findNearestSample(
-        mapping(uint256 => bytes32) storage samples,
+        ReservoirPair pair,
         uint256 lookUpDate,
-        uint256 offset,
-        uint256 length
-    ) public view returns (bytes32 prev, bytes32 next) {
+        uint16 offset,
+        uint16 length
+    ) public view returns (Observation memory prev, Observation memory next) {
         // We're going to perform a binary search in the circular buffer, which requires it to be sorted. To achieve
         // this, we offset all buffer accesses by `offset`, making the first element the oldest one.
 
         // Auxiliary variables in a typical binary search: we will look at some value `mid` between `low` and `high`,
         // periodically increasing `low` or decreasing `high` until we either find a match or determine the element is
         // not in the array.
-        uint256 low = 0;
-        uint256 high = length - 1;
-        uint256 mid;
+        uint16 low = 0;
+        uint16 high = length - 1;
+        uint16 mid;
 
         // If the search fails and no sample has a timestamp of `lookUpDate` (as is the most common scenario), `sample`
         // will be either the sample with the largest timestamp smaller than `lookUpDate`, or the one with the smallest
         // timestamp larger than `lookUpDate`.
-        bytes32 sample;
+        Observation memory sample;
         uint256 sampleTimestamp;
 
         while (low <= high) {
             // Mid is the floor of the average.
-            uint256 midWithoutOffset = (high + low) / 2;
+            uint16 midWithoutOffset = (high + low) / 2;
 
             // Recall that the buffer is not actually sorted: we need to apply the offset to access it in a sorted way.
             mid = midWithoutOffset.add(offset);
-            sample = samples[mid];
-            sampleTimestamp = sample.timestamp();
+            sample = pair.observation(mid);
+            sampleTimestamp = sample.timestamp;
 
             if (sampleTimestamp < lookUpDate) {
                 // If the mid sample is bellow the look up date, then increase the low index to start from there.
@@ -213,6 +211,6 @@ library QueryProcessor {
         }
 
         // In case we reach here, it means we didn't find exactly the sample we where looking for.
-        return sampleTimestamp < lookUpDate ? (sample, samples[mid.next()]) : (samples[mid.prev()], sample);
+        return sampleTimestamp < lookUpDate ? (sample, pair.observation(mid.next())) : (pair.observation(mid.prev()), sample);
     }
 }
