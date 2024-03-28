@@ -14,7 +14,7 @@
 
 pragma solidity ^0.8.0;
 
-import { OracleAverageQuery, OracleAccumulatorQuery } from "src/Structs.sol";
+import { OracleAverageQuery, OracleLatestQuery, OracleAccumulatorQuery } from "src/Structs.sol";
 import { Variable } from "src/Enums.sol";
 
 /**
@@ -27,7 +27,7 @@ import { Variable } from "src/Enums.sol";
  * Once the oracle is fully initialized, all queries are guaranteed to succeed as long as they require no data that
  * is not older than the largest safe query window.
  */
-interface IPriceOracle {
+interface IReservoirPriceOracle {
     /**
      * @dev Returns the time average weighted price corresponding to each of `queries`. Prices are represented as 18
      * decimal fixed point values.
@@ -40,7 +40,7 @@ interface IPriceOracle {
     /**
      * @dev Returns latest sample of `variable`. Prices are represented as 18 decimal fixed point values.
      */
-    function getLatest(Variable variable) external view returns (uint256);
+    function getLatest(OracleLatestQuery calldata variable) external view returns (uint256);
 
     /**
      * @dev Returns largest time window that can be safely queried, where 'safely' means the Oracle is guaranteed to be

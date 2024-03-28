@@ -12,8 +12,21 @@ import { Variable } from "src/Enums.sol";
  */
 struct OracleAverageQuery {
     Variable variable;
+    address base;
+    address quote;
     uint256 secs;
     uint256 ago;
+}
+
+/**
+ * @dev Information for a query for the latest variable
+ *
+ * TODO: fill this in
+ */
+struct OracleLatestQuery {
+    Variable variable;
+    address base;
+    address quote;
 }
 
 /**
@@ -23,5 +36,7 @@ struct OracleAverageQuery {
  */
 struct OracleAccumulatorQuery {
     Variable variable;
+    address base;
+    address quote;
     uint256 ago;
 }

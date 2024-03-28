@@ -17,7 +17,7 @@ import { LogCompression } from "amm-core/libraries/LogCompression.sol";
 import { Buffer } from "amm-core/libraries/Buffer.sol";
 import { ReservoirPair, Observation } from "amm-core/ReservoirPair.sol";
 
-import { IPriceOracle, Variable, OracleAverageQuery, OracleAccumulatorQuery } from "src/interfaces/IPriceOracle.sol";
+import { Variable, OracleAverageQuery, OracleAccumulatorQuery } from "src/interfaces/IReservoirPriceOracle.sol";
 import { BadVariableRequest, OracleNotInitialized, InvalidSeconds, QueryTooOld, BadSecs } from "src/Errors.sol";
 import { Samples } from "src/libraries/Samples.sol";
 
