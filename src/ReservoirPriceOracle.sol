@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import { IReservoirPriceOracle, OracleAverageQuery, OracleLatestQuery, OracleAccumulatorQuery, Variable } from "src/interfaces/IReservoirPriceOracle.sol";
+import {
+    IReservoirPriceOracle,
+    OracleAverageQuery,
+    OracleLatestQuery,
+    OracleAccumulatorQuery,
+    Variable
+} from "src/interfaces/IReservoirPriceOracle.sol";
 
 contract ReservoirPriceOracle is IReservoirPriceOracle {
     function getTimeWeightedAverage(OracleAverageQuery[] memory aQueries)
