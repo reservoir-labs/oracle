@@ -20,7 +20,6 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
 
     event Route(address token0, address token1, ReservoirPair pair);
 
-
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +34,20 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
         external
         view
         returns (uint256[] memory rResults)
-    { }
+    {
+        rResults = new uint256[](aQueries.length);
+
+        OracleAverageQuery memory lQuery;
+        for (uint256 i = 0; i < aQueries.length; ++i) {
+            lQuery = aQueries[i];
+            (address token0, address token1) = _sortTokens(lQuery.base, lQuery.quote);
+            ReservoirPair lPair = pairs[token0][token1];
+
+            (,,, uint16 lIndex) = lPair.getReserves();
+            // TODO: factor in potential inversion
+            rResults[i] = lPair.getTimeWeightedAverage(lQuery, lIndex);
+        }
+    }
 
     function getLatest(OracleLatestQuery calldata aQuery) external view returns (uint256) {
         (address token0, address token1) = _sortTokens(aQuery.base, aQuery.quote);
@@ -64,6 +76,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
             (address token0, address token1) = _sortTokens(query.base, query.quote);
             ReservoirPair lPair = pairs[token0][token1];
             (,,, uint16 lIndex) = lPair.getReserves();
+            // TODO: factor in potential inversion
             rResults[i] = lPair.getPastAccumulator(query.variable, lIndex, query.ago);
         }
     }
