@@ -48,6 +48,9 @@ interface IReservoirPriceOracle {
      *
      * If a query has a non-zero `ago` value, then `secs + ago` (the oldest point in time) must be smaller than this
      * value for 'safe' queries.
+     *
+     * Since ReservoirPair's oracle writes every second, the largest safe query window is the number of seconds
+     * same as the size of the buffer.
      */
     function getLargestSafeQueryWindow() external view returns (uint256);
 
