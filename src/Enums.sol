@@ -10,7 +10,7 @@ pragma solidity ^0.8.0;
 //
 // - CLAMPED_PRICE: the clamped price of the tokens in the Pool, in units of the first token. Clamping is necessary as
 //   as a countermeasure to oracle manipulation attempts.
-//   See `maxChangeRate` and `maxChangePerTrade` in `ReservoirPair
+//   Refer to `maxChangeRate` and `maxChangePerTrade` in `ReservoirPair` and the `Observation` struct
 //   Note that the price is computed *including* the tokens decimals, just like the raw price.
 enum Variable {
     RAW_PRICE,

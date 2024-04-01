@@ -35,12 +35,12 @@ library QueryProcessor {
     /**
      * @dev Returns the value for `variable` at the indexed sample.
      */
-    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index, bool reciprocal)
+    function getInstantValue(ReservoirPair pair, Variable variable, uint256 latestIndex, bool reciprocal)
         external
         view
         returns (uint256)
     {
-        Observation memory sample = pair.observation(index);
+        Observation memory sample = pair.observation(latestIndex);
         if (sample.timestamp == 0) revert OracleNotInitialized();
 
         int256 rawInstantValue = sample.instant(variable);
@@ -63,6 +63,7 @@ library QueryProcessor {
     {
         if (query.secs == 0) revert BadSecs();
 
+        // TODO: might need some unchecked arithmetic here
         int256 beginAccumulator = getPastAccumulator(pair, query.variable, latestIndex, query.ago + query.secs);
         int256 endAccumulator = getPastAccumulator(pair, query.variable, latestIndex, query.ago);
         return LogCompression.fromLowResLog((endAccumulator - beginAccumulator) / int256(query.secs));
@@ -93,6 +94,7 @@ library QueryProcessor {
         // solhint-disable not-rely-on-time
         // `ago` must not be before the epoch.
         if (block.timestamp < ago) revert InvalidSeconds();
+        // TODO: unchecked?
         uint256 lookUpTime = block.timestamp - ago;
 
         Observation memory latestSample = pair.observation(latestIndex);
@@ -105,6 +107,7 @@ library QueryProcessor {
             // The accumulator at times ahead of the latest one are computed by extrapolating the latest data. This is
             // equivalent to the instant value not changing between the last timestamp and the look up time.
 
+            // TODO: unchecked?
             // We can use unchecked arithmetic since the accumulator can be represented in 53 bits, timestamps in 31
             // bits, and the instant value in 22 bits.
             uint256 elapsed = lookUpTime - latestTimestamp;
@@ -141,6 +144,7 @@ library QueryProcessor {
             (Observation memory prev, Observation memory next) =
                 findNearestSample(pair, lookUpTime, oldestIndex, bufferLength);
 
+            // TODO: unchecked?
             // `next`'s timestamp is guaranteed to be larger than `prev`'s, so we can skip checked arithmetic.
             uint256 samplesTimeDiff = next.timestamp - prev.timestamp;
 
@@ -148,6 +152,7 @@ library QueryProcessor {
                 // We estimate the accumulator at the requested look up time by interpolating linearly between the
                 // previous and next accumulators.
 
+                // TODO: unchecked?
                 // We can use unchecked arithmetic since the accumulators can be represented in 53 bits, and timestamps
                 // in 31 bits.
                 int256 samplesAccDiff = next.accumulator(variable) - prev.accumulator(variable);

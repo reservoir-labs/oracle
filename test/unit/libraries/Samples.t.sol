@@ -24,7 +24,7 @@ contract SamplesTest is Test {
 
     function testInstant_BadVariableRequest() external {
         // would like to test the revert behavior when passing an invalid enum
-        // but it seems that solidity has a check to prevent casting a uint that is out of range of the enum
+        // but solidity has a check to prevent casting a uint that is out of range of the enum
         vm.expectRevert(stdError.enumConversionError);
         Variable lInvalid = Variable(uint(5));
     }
@@ -44,7 +44,7 @@ contract SamplesTest is Test {
 
     function testAccumulator_BadVariableRequest() external {
         // would like to test the revert behavior when passing an invalid enum
-        // but it seems that solidity has a check to prevent casting a uint that is out of range of the enum
+        // but solidity has a check to prevent casting a uint that is out of range of the enum
         vm.expectRevert(stdError.enumConversionError);
         Variable lInvalid = Variable(uint(5));
     }
