@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
+import { NoPairForRoute } from "src/Errors.sol";
 import {
     IReservoirPriceOracle,
     OracleAverageQuery,
@@ -10,7 +11,6 @@ import {
 } from "src/interfaces/IReservoirPriceOracle.sol";
 import { QueryProcessor, ReservoirPair, Buffer } from "src/libraries/QueryProcessor.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
-import { NoPairForRoute } from "src/Errors.sol";
 
 contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
     using QueryProcessor for ReservoirPair;
@@ -57,7 +57,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
         _validatePair(lPair);
 
         (,,, uint256 lIndex) = lPair.getReserves();
-        uint256 lResult =  lPair.getInstantValue(aQuery.variable, lIndex, token0 == aQuery.quote);
+        uint256 lResult = lPair.getInstantValue(aQuery.variable, lIndex, token0 == aQuery.quote);
         return lResult;
     }
 
