@@ -10,6 +10,7 @@ import {
 } from "src/interfaces/IReservoirPriceOracle.sol";
 import { QueryProcessor, ReservoirPair, Buffer } from "src/libraries/QueryProcessor.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
+import { NoPairForRoute } from "src/Errors.sol";
 
 contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
     using QueryProcessor for ReservoirPair;
@@ -42,6 +43,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
             lQuery = aQueries[i];
             (address token0, address token1) = _sortTokens(lQuery.base, lQuery.quote);
             ReservoirPair lPair = pairs[token0][token1];
+            _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
             // TODO: factor in potential inversion
@@ -52,9 +54,9 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
     function getLatest(OracleLatestQuery calldata aQuery) external view returns (uint256) {
         (address token0, address token1) = _sortTokens(aQuery.base, aQuery.quote);
         ReservoirPair lPair = pairs[token0][token1];
-        // TODO: validate pair address not zero
-        (,,, uint256 lIndex) = lPair.getReserves();
+        _validatePair(lPair);
 
+        (,,, uint256 lIndex) = lPair.getReserves();
         uint256 lResult =  lPair.getInstantValue(aQuery.variable, lIndex, token0 == aQuery.quote);
         return lResult;
     }
@@ -75,6 +77,8 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
             query = aQueries[i];
             (address token0, address token1) = _sortTokens(query.base, query.quote);
             ReservoirPair lPair = pairs[token0][token1];
+            _validatePair(lPair);
+
             (,,, uint16 lIndex) = lPair.getReserves();
             // TODO: factor in potential inversion
             rResults[i] = lPair.getPastAccumulator(query.variable, lIndex, query.ago);
@@ -85,15 +89,19 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
     //                                 INTERNAL FUNCTIONS                                        //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    function _sortTokens(address tokenA, address tokenB) private pure returns (address, address) {
+    function _sortTokens(address tokenA, address tokenB) internal pure returns (address, address) {
         return tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+    }
+
+    function _validatePair(ReservoirPair aPair) internal pure {
+        if (address(aPair) == address(0)) revert NoPairForRoute();
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                   ADMIN FUNCTIONS                                         //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    // sets a specific price to serve as price feed for a certain route
+    // sets a specific pair to serve as price feed for a certain route
     function setPairForRoute(address aToken0, address aToken1, ReservoirPair aPair) external onlyOwner {
         (aToken0, aToken1) = _sortTokens(aToken0, aToken1);
 
