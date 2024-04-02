@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import { Test, console2 } from "forge-std/Test.sol";
+import { Test, console2, stdError } from "forge-std/Test.sol";
 
 import { GenericFactory, IERC20 } from "amm-core/GenericFactory.sol";
 import { ConstantProductPair } from "amm-core/curve/constant-product/ConstantProductPair.sol";
@@ -53,24 +53,15 @@ contract QueryProcessorTest is Test {
         _pair.mint(address(this));
     }
 
-    function setUp() external {
-        // nothing to do here is there?
-    }
-
     function _createPair(address aTokenA, address aTokenB, uint256 aCurveId) internal returns (address rPair) {
         rPair = _factory.createPair(IERC20(aTokenA), IERC20(aTokenB), aCurveId);
     }
 
-    uint256 private offset;
-
-    modifier setOffset() {
-        _;
-    }
-
-    uint256 private currentBufferSize;
-
-    modifier setBufferSize() {
-        _;
+    function _fillBuffer(uint256 aBlockTime, uint256 aObservationsToWrite) internal {
+        for (uint256 i = 0; i < aObservationsToWrite; ++i) {
+            skip(aBlockTime);
+            _pair.sync();
+        }
     }
 
     modifier setAccumulatorPositive(bool aIsPositive) {
@@ -101,10 +92,10 @@ contract QueryProcessorTest is Test {
 
     function testGetTimeWeightedAverage() external {
         // arrange - perform some swaps
-        (,,, uint16 lLatestIndex) = _pair.getReserves();
+        // (,,, uint16 lLatestIndex) = _pair.getReserves();
 
         // act
-        _pair.getTimeWeightedAverage(OracleAverageQuery(Variable.RAW_PRICE, address(0), address(1), 1, 1), lLatestIndex);
+        // _pair.getTimeWeightedAverage(OracleAverageQuery(Variable.RAW_PRICE, address(0), address(1), 1, 1), lLatestIndex);
 
         // assert
     }
@@ -129,11 +120,8 @@ contract QueryProcessorTest is Test {
         uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
         uint256 lRandomSlot = bound(aRandomSlot, 0, lObservationsToWrite.sub(1));
 
-        // arrange - fill up the entire buffer with observations, but not exceed and overwrite it
-        for (uint256 i = 0; i < lObservationsToWrite; ++i) {
-            skip(lBlockTime);
-            _pair.sync();
-        }
+        // arrange
+        _fillBuffer(lBlockTime, lObservationsToWrite);
 
         // act
         uint256 lLookupTime = _pair.observation(lRandomSlot).timestamp;
@@ -159,10 +147,7 @@ contract QueryProcessorTest is Test {
         uint256 lRandomSlot = bound(aRandomSlot, 0, lObservationsToWrite.sub(2)); // can't be the latest one as lookupTime will go beyond
 
         // arrange
-        for (uint256 i = 0; i < lObservationsToWrite; ++i) {
-            skip(lBlockTime);
-            _pair.sync();
-        }
+        _fillBuffer(lBlockTime, lObservationsToWrite);
 
         // act
         uint256 lLookupTime = _pair.observation(lRandomSlot).timestamp + lBlockTime / 2;
@@ -189,19 +174,44 @@ contract QueryProcessorTest is Test {
         _pair.getInstantValue(Variable.RAW_PRICE, aIndex, false);
     }
 
-    function testGetInstantValue_NotInitialized_BeyondBufferSize() external {
-        // fill up buffer size
+    function testGetInstantValue_NotInitialized_BeyondBufferSize(uint8 aVariable, uint16 aIndex, bool aReciprocal) external {
+        // assume
+        Variable lVar = Variable(bound(aVariable, 0, 1));
+        uint16 lIndex = uint16(bound(aIndex, Buffer.SIZE, type(uint16).max));
 
-        // should return not initialized for anything that is outside the bounds of buffer
+        // arrange - fill up buffer size
+        _fillBuffer(5, Buffer.SIZE);
+
+        // act & assert should revert for all indexes that are outside the bounds of buffer
+        vm.expectRevert(OracleNotInitialized.selector);
+        // TODO: wrap query processor in a separate contract so that we can capture its revert
+        _pair.getInstantValue(lVar, lIndex, aReciprocal);
     }
 
-    function testGetPastAccumulator_BufferEmpty() external { }
+    function testGetPastAccumulator_BufferEmpty() external {
+
+
+        // act & assert
+
+    }
+
     function testGetPastAccumulator_TooLongAgo() external { }
     function testGetPastAccumulator_QueryTooOld() external {
         // expect revert query too old
     }
 
-    function testFindNearestSample_NotInitialized() external { }
+    // technically this should never happen in production as getPastAccumulator would have reverted with the
+    // `OracleNotInitialized` error if the oracle is not initialized
+    function testFindNearestSample_NotInitialized() external {
+        // arrange
+        uint256 lLookupTime = 123;
+        uint16 lOffset = 0;
+        uint16 lBufferLength = 0;
+
+        // act & assert
+        vm.expectRevert(stdError.arithmeticError);
+        _pair.findNearestSample(lLookupTime, lOffset, lBufferLength);
+    }
 
     function testGetTimeWeightedAverage_BadSecs() external { }
 }

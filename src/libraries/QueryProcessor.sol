@@ -36,7 +36,7 @@ library QueryProcessor {
      * @dev Returns the value for `variable` at the indexed sample.
      */
     function getInstantValue(ReservoirPair pair, Variable variable, uint256 index, bool reciprocal)
-        external
+        internal
         view
         returns (uint256)
     {
@@ -57,7 +57,7 @@ library QueryProcessor {
      * @dev Returns the time average weighted price corresponding to `query`.
      */
     function getTimeWeightedAverage(ReservoirPair pair, OracleAverageQuery memory query, uint16 latestIndex)
-        external
+        internal
         view
         returns (uint256)
     {
@@ -87,7 +87,7 @@ library QueryProcessor {
      * values. This process is guaranteed to complete performing at most 10 storage reads.
      */
     function getPastAccumulator(ReservoirPair pair, Variable variable, uint16 latestIndex, uint256 ago)
-        public
+        internal
         view
         returns (int256)
     {
@@ -175,7 +175,7 @@ library QueryProcessor {
      * timestamp of the latest sample.
      */
     function findNearestSample(ReservoirPair pair, uint256 lookUpDate, uint16 offset, uint16 length)
-        public
+        internal
         view
         returns (Observation memory prev, Observation memory next)
     {
