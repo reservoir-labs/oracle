@@ -61,7 +61,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
         return lResult;
     }
 
-    function getLargestSafeQueryWindow() external view returns (uint256) {
+    function getLargestSafeQueryWindow() external pure returns (uint256) {
         return Buffer.SIZE;
     }
 

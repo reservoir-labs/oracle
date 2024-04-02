@@ -35,12 +35,12 @@ library QueryProcessor {
     /**
      * @dev Returns the value for `variable` at the indexed sample.
      */
-    function getInstantValue(ReservoirPair pair, Variable variable, uint256 latestIndex, bool reciprocal)
+    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index, bool reciprocal)
         external
         view
         returns (uint256)
     {
-        Observation memory sample = pair.observation(latestIndex);
+        Observation memory sample = pair.observation(index);
         if (sample.timestamp == 0) revert OracleNotInitialized();
 
         int256 rawInstantValue = sample.instant(variable);
