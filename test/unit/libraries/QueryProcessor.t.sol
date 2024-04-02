@@ -177,9 +177,34 @@ contract QueryProcessorTest is Test {
 
     function testGetPastAccumulator_InterpolatesBetweenPastAccumulator() external { }
 
-    function testGetPastAccumulator_ExtrapolatesBeyondLatest() external { }
+    function testGetPastAccumulator_ExtrapolatesBeyondLatest(
+        uint32 aStartTime,
+        uint256 aBlockTime,
+        uint256 aObservationsToWrite,
+        uint256 aTimeBeyondLatest
+    ) external randomizeStartTime(aStartTime) {
+        // assume
+        uint256 lBlockTime = bound(aBlockTime, 1, 30);
+        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
+        uint256 lTimeBeyondLatest = bound(aTimeBeyondLatest, 1, 1 days);
 
-    function testGetPastAccumulator_RevertsWithTooOldTimestamp() external { }
+        // arrange
+        _fillBuffer(lBlockTime, lObservationsToWrite);
+        skip(lTimeBeyondLatest);
+        (,,, uint16 lIndex) = _pair.getReserves();
+
+        // act
+        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, 0);
+
+        // assert
+        vm.prank(address(_queryProcessor));
+        Observation memory lObs = _pair.observation(lIndex);
+        if (lAcc > 0) {
+            assertGt(lAcc, lObs.logAccRawPrice);
+        } else {
+            assertLt(lAcc, lObs.logAccRawPrice);
+        }
+    }
 
     function testFindNearestSample_CanFindExactValue(
         uint32 aStartTime,
