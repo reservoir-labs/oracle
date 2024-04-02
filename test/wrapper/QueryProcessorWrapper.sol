@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.0;
+
+import {
+    QueryProcessor,
+    ReservoirPair,
+    Variable,
+    Observation,
+    OracleAverageQuery,
+    OracleAccumulatorQuery
+} from "src/libraries/QueryProcessor.sol";
+
+contract QueryProcessorWrapper {
+    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index, bool reciprocal)
+        external
+        view
+        returns (uint256)
+    {
+        return QueryProcessor.getInstantValue(pair, variable, index, reciprocal);
+    }
+
+    function getTimeWeightedAverage(ReservoirPair pair, OracleAverageQuery memory query, uint16 latestIndex)
+        external
+        view
+        returns (uint256)
+    {
+        return QueryProcessor.getTimeWeightedAverage(pair, query, latestIndex);
+    }
+
+    function getPastAccumulator(ReservoirPair pair, Variable variable, uint16 latestIndex, uint256 ago)
+        external
+        view
+        returns (int256)
+    {
+        return QueryProcessor.getPastAccumulator(pair, variable, latestIndex, ago);
+    }
+
+    function findNearestSample(ReservoirPair pair, uint256 lookUpDate, uint16 offset, uint16 length)
+        external
+        view
+        returns (Observation memory prev, Observation memory next)
+    {
+        return QueryProcessor.findNearestSample(pair, lookUpDate, offset, length);
+    }
+}

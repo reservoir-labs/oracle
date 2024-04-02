@@ -10,19 +10,17 @@ import { Constants } from "amm-core/Constants.sol";
 import { FactoryStoreLib } from "amm-core/libraries/FactoryStore.sol";
 import { MintableERC20 } from "lib/amm-core/test/__fixtures/MintableERC20.sol";
 
+import { Buffer, OracleNotInitialized } from "src/libraries/QueryProcessor.sol";
 import {
-    Buffer,
-    QueryProcessor,
+    QueryProcessorWrapper,
     ReservoirPair,
-    OracleNotInitialized,
     OracleAverageQuery,
     Observation,
     Variable
-} from "src/libraries/QueryProcessor.sol";
+} from "test/wrapper/QueryProcessorWrapper.sol";
 
 contract QueryProcessorTest is Test {
     using FactoryStoreLib for GenericFactory;
-    using QueryProcessor for ReservoirPair;
     using Buffer for uint16;
 
     // TODO: test both negative and positive acc values
@@ -33,6 +31,8 @@ contract QueryProcessorTest is Test {
 
     MintableERC20 internal _tokenA = new MintableERC20("TokenA", "TA", 6);
     MintableERC20 internal _tokenB = new MintableERC20("TokenB", "TB", 18);
+
+    QueryProcessorWrapper internal _queryProcessor = new QueryProcessorWrapper();
 
     constructor() {
         _factory.addCurve(type(ConstantProductPair).creationCode);
@@ -45,7 +45,7 @@ contract QueryProcessorTest is Test {
         _factory.write("Shared::platformFeeTo", address(this));
         _factory.write("Shared::recoverer", address(this));
         _factory.write("Shared::maxChangeRate", Constants.DEFAULT_MAX_CHANGE_RATE);
-        _factory.write("Shared::oracleCaller", address(this));
+        _factory.write("Shared::oracleCaller", address(_queryProcessor));
 
         _pair = ReservoirPair(_createPair(address(_tokenA), address(_tokenB), 0));
         _tokenA.mint(address(_pair), 103e6);
@@ -82,8 +82,8 @@ contract QueryProcessorTest is Test {
         _pair.swap(-105e18, true, address(this), "");
 
         // act
-        uint256 lInstantRawPrice = _pair.getInstantValue(Variable.RAW_PRICE, 0, false);
-        uint256 lInstantClampedPrice = _pair.getInstantValue(Variable.CLAMPED_PRICE, 0, false);
+        uint256 lInstantRawPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, 0, false);
+        uint256 lInstantClampedPrice = _queryProcessor.getInstantValue(_pair, Variable.CLAMPED_PRICE, 0, false);
 
         // assert - instant price should be the new price after swap, not the price before swap
         assertApproxEqRel(lInstantRawPrice, 100e18, 0.01e18);
@@ -124,11 +124,12 @@ contract QueryProcessorTest is Test {
         _fillBuffer(lBlockTime, lObservationsToWrite);
 
         // act
+        vm.prank(address(_queryProcessor));
         uint256 lLookupTime = _pair.observation(lRandomSlot).timestamp;
         uint16 lOffset = lObservationsToWrite > Buffer.SIZE ? lObservationsToWrite % Buffer.SIZE : 0;
         uint16 lBufferLength = lObservationsToWrite > Buffer.SIZE ? Buffer.SIZE : lObservationsToWrite;
         (Observation memory prev, Observation memory next) =
-            _pair.findNearestSample(lLookupTime, lOffset, lBufferLength);
+            _queryProcessor.findNearestSample(_pair, lLookupTime, lOffset, lBufferLength);
 
         // assert
         assertEq(prev.timestamp, next.timestamp, "prev.timestamp != next.timestamp");
@@ -150,11 +151,12 @@ contract QueryProcessorTest is Test {
         _fillBuffer(lBlockTime, lObservationsToWrite);
 
         // act
+        vm.prank(address(_queryProcessor));
         uint256 lLookupTime = _pair.observation(lRandomSlot).timestamp + lBlockTime / 2;
         uint16 lOffset = lObservationsToWrite > Buffer.SIZE ? lObservationsToWrite % Buffer.SIZE : 0;
         uint16 lBufferLength = lObservationsToWrite > Buffer.SIZE ? Buffer.SIZE : lObservationsToWrite;
         (Observation memory prev, Observation memory next) =
-            _pair.findNearestSample(lLookupTime, lOffset, lBufferLength);
+            _queryProcessor.findNearestSample(_pair, lLookupTime, lOffset, lBufferLength);
 
         // assert
         assertEq(prev.timestamp + lBlockTime, next.timestamp, "next is not prev + blocktime");
@@ -171,10 +173,12 @@ contract QueryProcessorTest is Test {
     function testGetInstantValue_NotInitialized(uint256 aIndex) external {
         // act & assert
         vm.expectRevert(OracleNotInitialized.selector);
-        _pair.getInstantValue(Variable.RAW_PRICE, aIndex, false);
+        _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, aIndex, false);
     }
 
-    function testGetInstantValue_NotInitialized_BeyondBufferSize(uint8 aVariable, uint16 aIndex, bool aReciprocal) external {
+    function testGetInstantValue_NotInitialized_BeyondBufferSize(uint8 aVariable, uint16 aIndex, bool aReciprocal)
+        external
+    {
         // assume
         Variable lVar = Variable(bound(aVariable, 0, 1));
         uint16 lIndex = uint16(bound(aIndex, Buffer.SIZE, type(uint16).max));
@@ -184,15 +188,11 @@ contract QueryProcessorTest is Test {
 
         // act & assert should revert for all indexes that are outside the bounds of buffer
         vm.expectRevert(OracleNotInitialized.selector);
-        // TODO: wrap query processor in a separate contract so that we can capture its revert
-        _pair.getInstantValue(lVar, lIndex, aReciprocal);
+        _queryProcessor.getInstantValue(_pair, lVar, lIndex, aReciprocal);
     }
 
     function testGetPastAccumulator_BufferEmpty() external {
-
-
         // act & assert
-
     }
 
     function testGetPastAccumulator_TooLongAgo() external { }
@@ -210,7 +210,7 @@ contract QueryProcessorTest is Test {
 
         // act & assert
         vm.expectRevert(stdError.arithmeticError);
-        _pair.findNearestSample(lLookupTime, lOffset, lBufferLength);
+        _queryProcessor.findNearestSample(_pair, lLookupTime, lOffset, lBufferLength);
     }
 
     function testGetTimeWeightedAverage_BadSecs() external { }
