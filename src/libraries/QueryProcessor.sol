@@ -77,7 +77,7 @@ library QueryProcessor {
      *  - if the buffer is empty.
      *  - if querying past information and the buffer has not been fully initialized.
      *  - if querying older information than available in the buffer. Note that a full buffer guarantees queries for the
-     *    past 34 hours will not revert.
+     *    past largest safe query window will not revert.
      *
      * If requesting information for a timestamp later than the latest one, it is extrapolated using the latest
      * available data.
