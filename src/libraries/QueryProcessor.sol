@@ -56,18 +56,17 @@ library QueryProcessor {
     /**
      * @dev Returns the time average weighted price corresponding to `query`.
      */
-    // TODO: no need to pass in the entire struct here, only the variable, secs, ago will do
-    function getTimeWeightedAverage(ReservoirPair pair, OracleAverageQuery memory query, uint16 latestIndex)
+    function getTimeWeightedAverage(ReservoirPair pair, Variable variable, uint256 secs, uint256 ago, uint16 latestIndex)
         internal
         view
         returns (uint256)
     {
-        if (query.secs == 0) revert BadSecs();
+        if (secs == 0) revert BadSecs();
 
         // TODO: might need some unchecked arithmetic here
-        int256 beginAccumulator = getPastAccumulator(pair, query.variable, latestIndex, query.ago + query.secs);
-        int256 endAccumulator = getPastAccumulator(pair, query.variable, latestIndex, query.ago);
-        return LogCompression.fromLowResLog((endAccumulator - beginAccumulator) / int256(query.secs));
+        int256 beginAccumulator = getPastAccumulator(pair, variable, latestIndex, ago + secs);
+        int256 endAccumulator = getPastAccumulator(pair, variable, latestIndex, ago);
+        return LogCompression.fromLowResLog((endAccumulator - beginAccumulator) / int256(secs));
     }
 
     /**

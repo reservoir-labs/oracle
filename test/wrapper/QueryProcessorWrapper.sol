@@ -5,9 +5,7 @@ import {
     QueryProcessor,
     ReservoirPair,
     Variable,
-    Observation,
-    OracleAverageQuery,
-    OracleAccumulatorQuery
+    Observation
 } from "src/libraries/QueryProcessor.sol";
 
 contract QueryProcessorWrapper {
@@ -19,12 +17,12 @@ contract QueryProcessorWrapper {
         return QueryProcessor.getInstantValue(pair, variable, index, reciprocal);
     }
 
-    function getTimeWeightedAverage(ReservoirPair pair, OracleAverageQuery memory query, uint16 latestIndex)
+    function getTimeWeightedAverage(ReservoirPair pair, Variable variable, uint256 secs, uint256 ago, uint16 latestIndex)
         external
         view
         returns (uint256)
     {
-        return QueryProcessor.getTimeWeightedAverage(pair, query, latestIndex);
+        return QueryProcessor.getTimeWeightedAverage(pair, variable, secs, ago, latestIndex);
     }
 
     function getPastAccumulator(ReservoirPair pair, Variable variable, uint16 latestIndex, uint256 ago)

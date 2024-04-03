@@ -47,7 +47,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
 
             (,,, uint16 lIndex) = lPair.getReserves();
             // TODO: factor in potential inversion
-            rResults[i] = lPair.getTimeWeightedAverage(lQuery, lIndex);
+            rResults[i] = lPair.getTimeWeightedAverage(lQuery.variable, lQuery.secs, lQuery.ago, lIndex);
         }
     }
 

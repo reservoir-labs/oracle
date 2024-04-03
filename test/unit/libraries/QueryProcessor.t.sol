@@ -15,7 +15,6 @@ import { Buffer, OracleNotInitialized, InvalidSeconds, QueryTooOld, BadSecs } fr
 import {
     QueryProcessorWrapper,
     ReservoirPair,
-    OracleAverageQuery,
     Observation,
     Variable
 } from "test/wrapper/QueryProcessorWrapper.sol";
@@ -394,7 +393,7 @@ contract QueryProcessorTest is Test {
         // act & assert
         vm.expectRevert(BadSecs.selector);
         _queryProcessor.getTimeWeightedAverage(
-            _pair, OracleAverageQuery(Variable.RAW_PRICE, address(0), address(0), 0, 0), 0
+            _pair, Variable.RAW_PRICE, 0, 0, 0
         );
     }
 }
