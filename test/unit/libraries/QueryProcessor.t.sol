@@ -108,7 +108,7 @@ contract QueryProcessorTest is Test {
         uint16 aBlocksAgo
     ) external randomizeStartTime(aStartTime) {
         // assume
-        uint256 lBlockTime = bound(aBlockTime, 1, 30);
+        uint256 lBlockTime = bound(aBlockTime, 1, 60);
         uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
         uint16 lBlocksAgo = uint16(bound(aBlocksAgo, 0, lObservationsToWrite % Buffer.SIZE));
 
@@ -132,8 +132,8 @@ contract QueryProcessorTest is Test {
         uint256 aObservationsToWrite
     ) external randomizeStartTime(aStartTime) {
         // assume
-        uint256 lBlockTime = bound(aBlockTime, 1, 30);
-        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
+        uint256 lBlockTime = bound(aBlockTime, 1, 60);
+        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3));
 
         // arrange
         _fillBuffer(lBlockTime, lObservationsToWrite);
@@ -175,7 +175,36 @@ contract QueryProcessorTest is Test {
         vm.stopPrank();
     }
 
-    function testGetPastAccumulator_InterpolatesBetweenPastAccumulator() external { }
+    function testGetPastAccumulator_InterpolatesBetweenPastAccumulators(
+        uint32 aStartTime,
+        uint256 aBlockTime,
+        uint256 aObservationsToWrite,
+        uint256 aRandomSlot
+    ) external randomizeStartTime(aStartTime) {
+        // assume
+        uint256 lBlockTime = bound(aBlockTime, 3, 60);
+        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3));
+        uint16 lRandomSlot = uint16(bound(aRandomSlot, 0, lObservationsToWrite.sub(2)));
+
+        // arrange
+        _fillBuffer(lBlockTime, lObservationsToWrite);
+        (,,, uint16 lIndex) = _pair.getReserves();
+
+        // act
+        vm.startPrank(address(_queryProcessor));
+        Observation memory lPrevObs = _pair.observation(lRandomSlot);
+        uint256 lWantedTimestamp = lPrevObs.timestamp + lBlockTime / 2;
+        uint256 lAgo = block.timestamp - lWantedTimestamp;
+        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
+
+        // assert
+        Observation memory lNextObs = _pair.observation(lRandomSlot.next());
+        int256 lAccDiff = lNextObs.logAccRawPrice - lPrevObs.logAccRawPrice;
+        assertGt(lNextObs.timestamp, lWantedTimestamp);
+        assertLt(lPrevObs.timestamp, lWantedTimestamp);
+        assertEq(lAcc, lPrevObs.logAccRawPrice + lAccDiff * int(lBlockTime / 2) / int256(lBlockTime));
+        vm.stopPrank();
+    }
 
     function testGetPastAccumulator_ExtrapolatesBeyondLatest(
         uint32 aStartTime,
@@ -186,7 +215,7 @@ contract QueryProcessorTest is Test {
         // assume
         uint256 lBlockTime = bound(aBlockTime, 1, 30);
         uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
-        uint256 lTimeBeyondLatest = bound(aTimeBeyondLatest, 1, 1 days);
+        uint256 lTimeBeyondLatest = bound(aTimeBeyondLatest, 1, 90 days);
 
         // arrange
         _fillBuffer(lBlockTime, lObservationsToWrite);
@@ -204,6 +233,7 @@ contract QueryProcessorTest is Test {
         } else {
             assertLt(lAcc, lObs.logAccRawPrice);
         }
+        assertEq(lAcc, lObs.logAccRawPrice + int256(lTimeBeyondLatest) * lObs.logInstantRawPrice);
     }
 
     function testFindNearestSample_CanFindExactValue(
@@ -308,7 +338,7 @@ contract QueryProcessorTest is Test {
     ) external randomizeStartTime(aStartTime) {
         // assume
         uint256 lBlockTime = bound(aBlockTime, 3, 60);
-        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
+        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3));
         uint256 lAgo = bound(aAgo, aStartTime + lBlockTime * lObservationsToWrite + 1, type(uint256).max);
 
         // arrange
@@ -328,7 +358,7 @@ contract QueryProcessorTest is Test {
     ) external randomizeStartTime(aStartTime) {
         // assume
         uint256 lBlockTime = bound(aBlockTime, 3, 60);
-        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
+        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3));
 
         // arrange
         _fillBuffer(lBlockTime, lObservationsToWrite);
