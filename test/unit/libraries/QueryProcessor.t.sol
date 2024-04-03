@@ -11,7 +11,7 @@ import { Constants } from "amm-core/Constants.sol";
 import { FactoryStoreLib } from "amm-core/libraries/FactoryStore.sol";
 import { MintableERC20 } from "lib/amm-core/test/__fixtures/MintableERC20.sol";
 
-import { Buffer, OracleNotInitialized, InvalidSeconds, QueryTooOld } from "src/libraries/QueryProcessor.sol";
+import { Buffer, OracleNotInitialized, InvalidSeconds, QueryTooOld, BadSecs } from "src/libraries/QueryProcessor.sol";
 import {
     QueryProcessorWrapper,
     ReservoirPair,
@@ -110,19 +110,20 @@ contract QueryProcessorTest is Test {
         // assume
         uint256 lBlockTime = bound(aBlockTime, 1, 60);
         uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
-        uint16 lBlocksAgo = uint16(bound(aBlocksAgo, 0, lObservationsToWrite % Buffer.SIZE));
+        uint16 lBlocksAgo = uint16(bound(aBlocksAgo, 0, lObservationsToWrite.sub(1)));
 
         // arrange
         _fillBuffer(lBlockTime, lObservationsToWrite);
         (,,, uint16 lIndex) = _pair.getReserves();
 
         // act
-        uint256 lAgo = FixedPointMathLib.min(lBlockTime * lBlocksAgo, aStartTime); // so that we don't query beyond the oldest sample
+        uint256 lAgo = lBlockTime * lBlocksAgo;   // FixedPointMathLib.min(lBlockTime * lBlocksAgo, aStartTime); // so that we don't query beyond the oldest sample
         int256 lAcc = _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
 
         // assert
+        uint256 lDesiredIndex = lIndex.sub(lBlocksAgo);
         vm.prank(address(_queryProcessor));
-        Observation memory lObs = _pair.observation(lIndex.sub(lAgo == aStartTime ? lObservationsToWrite : lBlocksAgo));
+        Observation memory lObs = _pair.observation(lDesiredIndex);
         assertEq(lAcc, lObs.logAccRawPrice);
     }
 
@@ -202,7 +203,7 @@ contract QueryProcessorTest is Test {
         int256 lAccDiff = lNextObs.logAccRawPrice - lPrevObs.logAccRawPrice;
         assertGt(lNextObs.timestamp, lWantedTimestamp);
         assertLt(lPrevObs.timestamp, lWantedTimestamp);
-        assertEq(lAcc, lPrevObs.logAccRawPrice + lAccDiff * int(lBlockTime / 2) / int256(lBlockTime));
+        assertEq(lAcc, lPrevObs.logAccRawPrice + lAccDiff * int256(lBlockTime / 2) / int256(lBlockTime));
         vm.stopPrank();
     }
 
@@ -389,5 +390,11 @@ contract QueryProcessorTest is Test {
         _queryProcessor.findNearestSample(_pair, lLookupTime, lOffset, lBufferLength);
     }
 
-    function testGetTimeWeightedAverage_BadSecs() external { }
+    function testGetTimeWeightedAverage_BadSecs() external {
+        // act & assert
+        vm.expectRevert(BadSecs.selector);
+        _queryProcessor.getTimeWeightedAverage(
+            _pair, OracleAverageQuery(Variable.RAW_PRICE, address(0), address(0), 0, 0), 0
+        );
+    }
 }

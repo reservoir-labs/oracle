@@ -56,6 +56,7 @@ library QueryProcessor {
     /**
      * @dev Returns the time average weighted price corresponding to `query`.
      */
+    // TODO: no need to pass in the entire struct here, only the variable, secs, ago will do
     function getTimeWeightedAverage(ReservoirPair pair, OracleAverageQuery memory query, uint16 latestIndex)
         internal
         view
