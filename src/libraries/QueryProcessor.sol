@@ -54,7 +54,7 @@ library QueryProcessor {
     }
 
     /**
-     * @dev Returns the time average weighted price corresponding to `query`.
+     * @dev Returns the time average weighted price
      */
     function getTimeWeightedAverage(
         ReservoirPair pair,
@@ -89,7 +89,7 @@ library QueryProcessor {
      *
      * When no exact information is available for the requested past timestamp (as usually happens, since at most one
      * timestamp is stored every two minutes), it is estimated by performing linear interpolation using the closest
-     * values. This process is guaranteed to complete performing at most 10 storage reads.
+     * values. This process is guaranteed to complete performing at most 11 storage reads.
      */
     function getPastAccumulator(ReservoirPair pair, Variable variable, uint16 latestIndex, uint256 ago)
         internal

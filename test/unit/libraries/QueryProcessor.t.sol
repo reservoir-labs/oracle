@@ -85,14 +85,39 @@ contract QueryProcessorTest is Test {
         assertApproxEqRel(lInstantClampedPrice, 100e18, 0.01e18);
     }
 
-    function testGetTimeWeightedAverage() external {
+    function testGetTimeWeightedAverage(
+        uint32 aStartTime,
+        uint256 aBlockTime,
+        uint256 aObservationsToWrite,
+        uint256 aSecs,
+        uint256 aAgo
+    ) external randomizeStartTime(aStartTime) {
+        // assume
+        uint256 lBlockTime = bound(aBlockTime, 1, 60);
+        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3));
+        uint256 lSecs = bound(aSecs, 1, 1 hours);
+        uint256 lAgo = bound(aAgo, 0, 1 hours);
+
+        // ensure that the query window is within what is still available in the buffer
+        // the fact that we potentially go around the buffer more than one means that maybe the query window's
+        // samples have been overwritten. Thus the need for the modulus.
+        vm.assume(lSecs + lAgo <= (lBlockTime * lObservationsToWrite) % (lBlockTime * Buffer.SIZE));
+
         // arrange - perform some swaps
-        // (,,, uint16 lLatestIndex) = _pair.getReserves();
+        uint256 lSwapAmt = 1e6;
+        for (uint256 i = 0; i < lObservationsToWrite; ++i) {
+            skip(lBlockTime);
+            _tokenA.mint(address(_pair), lSwapAmt);
+            _pair.swap(int256(lSwapAmt), true, address(this), "");
+        }
 
         // act
-        // _pair.getTimeWeightedAverage(OracleAverageQuery(Variable.RAW_PRICE, address(0), address(1), 1, 1), lLatestIndex);
+        (,,, uint16 lLatestIndex) = _pair.getReserves();
+        uint256 lAveragePrice = _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, lSecs, lAgo, lLatestIndex);
 
         // assert
+        // TODO: figure out how to verify the TWAP independently
+        assertEq(lAveragePrice, 5);
     }
 
     function testGetPastAccumulator_ExactMatch(
