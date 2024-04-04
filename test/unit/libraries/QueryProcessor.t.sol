@@ -293,6 +293,23 @@ contract QueryProcessorTest is Test {
         assertLt(lLookupTime, next.timestamp);
     }
 
+    function testFindNearestSample_OneSample(uint256 aBlockTime) external {
+        // assume
+        uint256 lBlockTime = bound(aBlockTime, 1, 60);
+
+        // arrange
+        _fillBuffer(lBlockTime, 1);
+
+        // act
+        (Observation memory prev, Observation memory next) =
+            _queryProcessor.findNearestSample(_pair, block.timestamp, 0, 1);
+
+        // assert
+        assertEq(prev.timestamp, next.timestamp);
+        assertGt(prev.logAccRawPrice, 0);
+        assertGt(prev.timestamp, 0);
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                 ERROR CONDITIONS                                          //
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -376,8 +393,10 @@ contract QueryProcessorTest is Test {
         _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
     }
 
-    // technically this should never happen in production as getPastAccumulator would have reverted with the
+    // technically this should never happen in production as `getPastAccumulator` would have reverted with the
     // `OracleNotInitialized` error if the oracle is not initialized
+    // so the expected revert is one of running out of gas, having done too many iterations as the subtraction has underflown
+    // due to supplying a buffer length of 0
     function testFindNearestSample_NotInitialized() external {
         // arrange
         uint256 lLookupTime = 123;
@@ -385,15 +404,13 @@ contract QueryProcessorTest is Test {
         uint16 lBufferLength = 0;
 
         // act & assert
-        vm.expectRevert(stdError.arithmeticError);
+        vm.expectRevert();
         _queryProcessor.findNearestSample(_pair, lLookupTime, lOffset, lBufferLength);
     }
 
     function testGetTimeWeightedAverage_BadSecs() external {
         // act & assert
         vm.expectRevert(BadSecs.selector);
-        _queryProcessor.getTimeWeightedAverage(
-            _pair, Variable.RAW_PRICE, 0, 0, 0
-        );
+        _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, 0, 0, 0);
     }
 }
