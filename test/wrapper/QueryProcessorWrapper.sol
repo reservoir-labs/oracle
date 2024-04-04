@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {
-    QueryProcessor,
-    ReservoirPair,
-    Variable,
-    Observation
-} from "src/libraries/QueryProcessor.sol";
+import { QueryProcessor, ReservoirPair, Variable, Observation } from "src/libraries/QueryProcessor.sol";
 
 contract QueryProcessorWrapper {
     function getInstantValue(ReservoirPair pair, Variable variable, uint256 index, bool reciprocal)
@@ -17,11 +12,13 @@ contract QueryProcessorWrapper {
         return QueryProcessor.getInstantValue(pair, variable, index, reciprocal);
     }
 
-    function getTimeWeightedAverage(ReservoirPair pair, Variable variable, uint256 secs, uint256 ago, uint16 latestIndex)
-        external
-        view
-        returns (uint256)
-    {
+    function getTimeWeightedAverage(
+        ReservoirPair pair,
+        Variable variable,
+        uint256 secs,
+        uint256 ago,
+        uint16 latestIndex
+    ) external view returns (uint256) {
         return QueryProcessor.getTimeWeightedAverage(pair, variable, secs, ago, latestIndex);
     }
 

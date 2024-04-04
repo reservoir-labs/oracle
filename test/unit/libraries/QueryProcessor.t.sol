@@ -12,12 +12,7 @@ import { FactoryStoreLib } from "amm-core/libraries/FactoryStore.sol";
 import { MintableERC20 } from "lib/amm-core/test/__fixtures/MintableERC20.sol";
 
 import { Buffer, OracleNotInitialized, InvalidSeconds, QueryTooOld, BadSecs } from "src/libraries/QueryProcessor.sol";
-import {
-    QueryProcessorWrapper,
-    ReservoirPair,
-    Observation,
-    Variable
-} from "test/wrapper/QueryProcessorWrapper.sol";
+import { QueryProcessorWrapper, ReservoirPair, Observation, Variable } from "test/wrapper/QueryProcessorWrapper.sol";
 
 contract QueryProcessorTest is Test {
     using FactoryStoreLib for GenericFactory;
@@ -116,7 +111,7 @@ contract QueryProcessorTest is Test {
         (,,, uint16 lIndex) = _pair.getReserves();
 
         // act
-        uint256 lAgo = lBlockTime * lBlocksAgo;   // FixedPointMathLib.min(lBlockTime * lBlocksAgo, aStartTime); // so that we don't query beyond the oldest sample
+        uint256 lAgo = lBlockTime * lBlocksAgo;
         int256 lAcc = _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
 
         // assert
@@ -244,7 +239,7 @@ contract QueryProcessorTest is Test {
     ) external randomizeStartTime(aStartTime) {
         // assume
         uint256 lBlockTime = bound(aBlockTime, 1, 30);
-        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
+        uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 2, Buffer.SIZE * 3)); // go around it 3 times maximum
         uint256 lRandomSlot = bound(aRandomSlot, 0, lObservationsToWrite.sub(1));
 
         // arrange
