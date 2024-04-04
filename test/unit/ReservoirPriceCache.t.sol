@@ -6,7 +6,7 @@ import { ReservoirPriceCache, IReservoirPriceOracle } from "src/ReservoirPriceCa
 
 contract ReservoirPriceCacheTest is Test {
     ReservoirPriceCache internal _priceCache =
-        new ReservoirPriceCache(IReservoirPriceOracle(address(0)), 0.02e18, 15 minutes, 2e18);
+        new ReservoirPriceCache(address(0), 0.02e18, 15 minutes, 2e18);
 
     event Oracle(address newOracle);
 
