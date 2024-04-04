@@ -66,8 +66,8 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard {
     //                                CONSTRUCTOR, FALLBACKS                                     //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    constructor(IReservoirPriceOracle aOracle, uint64 aThreshold, uint64 aTwapPeriod, uint64 aMultiplier) {
-        oracle = aOracle;
+    constructor(address aOracle, uint64 aThreshold, uint64 aTwapPeriod, uint64 aMultiplier) {
+        updateOracle(aOracle);
         updatePriceDeviationThreshold(aThreshold);
         updateTwapPeriod(aTwapPeriod);
         updateRewardMultiplier(aMultiplier);
@@ -85,6 +85,7 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard {
 
     function updateOracle(address aOracle) public onlyOwner {
         oracle = IReservoirPriceOracle(aOracle);
+        emit Oracle(aOracle);
     }
 
     function updatePriceDeviationThreshold(uint64 aNewThreshold) public onlyOwner {
