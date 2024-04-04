@@ -113,7 +113,8 @@ contract QueryProcessorTest is Test {
 
         // act
         (,,, uint16 lLatestIndex) = _pair.getReserves();
-        uint256 lAveragePrice = _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, lSecs, lAgo, lLatestIndex);
+        uint256 lAveragePrice =
+            _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, lSecs, lAgo, lLatestIndex);
 
         // assert
         // TODO: figure out how to verify the TWAP independently
