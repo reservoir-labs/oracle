@@ -166,8 +166,11 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard {
     }
 
     function _rewardUpdater(address lRecipient) internal {
-        // TODO: make sure this works on L1 as well as L2s
-        uint256 lPayoutAmt = block.basefee.mulWadDown(rewardMultiplier);
+        // N.B. Revisit this whenever deployment on a new chain is needed
+        // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()` on ARB because the latter will always return
+        // the demand insensitive base fee, while the former can return real higher fees during times of congestion
+        // safety: can this mul overflow?
+        uint256 lPayoutAmt = block.basefee * rewardMultiplier;
 
         if (lPayoutAmt <= address(this).balance) {
             payable(lRecipient).transfer(lPayoutAmt);
