@@ -5,10 +5,10 @@ import { Test } from "forge-std/Test.sol";
 import { ReservoirPriceCache, IReservoirPriceOracle } from "src/ReservoirPriceCache.sol";
 
 contract ReservoirPriceCacheTest is Test {
-    ReservoirPriceCache internal _priceCache =
-        new ReservoirPriceCache(address(0), 0.02e18, 15 minutes, 2e18);
+    ReservoirPriceCache internal _priceCache = new ReservoirPriceCache(address(0), 0.02e18, 15 minutes, 2e18);
 
     event Oracle(address newOracle);
+    event RewardMultiplier(uint256 newMultiplier);
 
     function testIsPriceUpdateIncentivized(uint256 aBountyAmount) external {
         // assume
@@ -30,6 +30,7 @@ contract ReservoirPriceCacheTest is Test {
     }
 
     function testGasBountyAvailable() external { }
+
     function testGasBountyAvailable_Zero() external {
         // sanity
         assertEq(address(_priceCache).balance, 0);
@@ -39,6 +40,7 @@ contract ReservoirPriceCacheTest is Test {
     }
 
     function testGetPriceForPair() external { }
+
     function testGetPriceForPair_Null() external {
         // assert
         assertEq(_priceCache.getPriceForPair(address(123)), 0);
@@ -57,7 +59,7 @@ contract ReservoirPriceCacheTest is Test {
         assertEq(address(_priceCache.oracle()), lNewOracleAddress);
     }
 
-    function testUpdateOracle_OnlyOwner() external {
+    function testUpdateOracle_NotOwner() external {
         // act & assert
         vm.prank(address(123));
         vm.expectRevert("UNAUTHORIZED");
@@ -66,7 +68,26 @@ contract ReservoirPriceCacheTest is Test {
 
     function testUpdatePriceDeviationThreshold() external { }
     function testUpdateTwapPeriod() external { }
-    function testUpdateRewardMultiplier() external { }
+
+    function testUpdateRewardMultiplier() external {
+        // arrange
+        uint64 lNewRewardMultiplier = 50;
+
+        // act
+        vm.expectEmit(false, false, false, false);
+        emit RewardMultiplier(lNewRewardMultiplier);
+        _priceCache.updateRewardMultiplier(lNewRewardMultiplier);
+
+        // assert
+        assertEq(_priceCache.rewardMultiplier(), lNewRewardMultiplier);
+    }
+
+    function testUpdateRewardMultiplier_NotOwner() external {
+        // act & assert
+        vm.prank(address(123));
+        vm.expectRevert("UNAUTHORIZED");
+        _priceCache.updateRewardMultiplier(111);
+    }
 
     function testUpdatePrice_BeyondThreshold() external { }
     function testUpdatePrice_WithinThreshold() external { }
