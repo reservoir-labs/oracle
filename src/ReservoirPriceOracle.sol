@@ -61,10 +61,6 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
         return lResult;
     }
 
-    function getLargestSafeQueryWindow() external pure returns (uint256) {
-        return Buffer.SIZE;
-    }
-
     function getPastAccumulators(OracleAccumulatorQuery[] memory aQueries)
         external
         view
@@ -83,6 +79,10 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
             // TODO: factor in potential inversion
             rResults[i] = lPair.getPastAccumulator(query.variable, lIndex, query.ago);
         }
+    }
+
+    function getLargestSafeQueryWindow() external pure returns (uint256) {
+        return Buffer.SIZE;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
