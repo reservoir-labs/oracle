@@ -13,9 +13,13 @@ import {
     OracleAccumulatorQuery,
     Variable
 } from "src/interfaces/IReservoirPriceOracle.sol";
+import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
 
-contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard {
+import { Utils } from "src/libraries/Utils.sol";
+
+contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle {
     using FixedPointMathLib for uint256;
+    using Utils for address;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       CONSTANTS                                           //
@@ -51,8 +55,8 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard {
     /// 1e18 == 100%
     uint64 public priceDeviationThreshold;
 
-    /// @notice percentage of gas fee the contract rewards the caller for updating the price
-    /// 1e18 == 100%
+    /// @notice multiples of the base fee the contract rewards the caller for updating the price when it goes
+    /// beyond the `priceDeviationThreshold`
     uint64 public rewardMultiplier;
 
     /// @notice TWAP period for querying the oracle
@@ -110,10 +114,30 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard {
         emit RewardMultiplier(aNewMultiplier);
     }
 
-    // oracle price functions
+    // IPriceOracle
 
-    function getPriceForPair(address aPair) external view returns (uint256) {
-        return priceCache[aPair];
+    function name() external view returns (string memory) {
+        return "RESERVOIR PRICE CACHE";
+    }
+
+    function getQuote(uint256 aAmount, address aBase, address aQuote) external view returns (uint256 rOut) {
+        // figure out which pair to use for the given base quote asset
+        // where should the lookup table reside? in this contract or in the main oracle contract?
+        (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
+
+        address lPair = lookup[aBase][aQuote];
+
+        uint256 lPrice = priceCache[lPair];
+
+        //
+    }
+
+    function getQuotes(uint256 aAmount, address aBase, address aQuote)
+        external
+        view
+        returns (uint256 rBidOut, uint256 rAskOut)
+    {
+        return 0;
     }
 
     // price update related functions
@@ -129,6 +153,8 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard {
     /// @dev we do not allow specifying which address gets the reward, to save on calldata gas
     function updatePrice(address aPair) external nonReentrant {
         ReservoirPair lPair = ReservoirPair(aPair);
+
+        // validate that the pair is indeed ours and whitelisted
 
         OracleAverageQuery[] memory lQueries;
         lQueries[0] = OracleAverageQuery(
@@ -169,7 +195,7 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard {
         // N.B. Revisit this whenever deployment on a new chain is needed
         // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()` on ARB because the latter will always return
         // the demand insensitive base fee, while the former can return real higher fees during times of congestion
-        // safety: can this mul overflow?
+        // safety: this mul will not overflow even in extreme cases of `block.basefee`
         uint256 lPayoutAmt = block.basefee * rewardMultiplier;
 
         if (lPayoutAmt <= address(this).balance) {
