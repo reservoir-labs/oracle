@@ -5,8 +5,6 @@ import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solmate/src/utils/FixedPointMathLib.sol";
 
-import { ReservoirPair } from "amm-core/ReservoirPair.sol";
-
 import {
     IReservoirPriceOracle,
     OracleAverageQuery,
@@ -25,8 +23,9 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     //                                       CONSTANTS                                           //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    uint256 MAX_DEVIATION_THRESHOLD = 0.2e18; // 20%
-    uint256 MAX_TWAP_PERIOD = 1 hours;
+    uint256 private constant MAX_DEVIATION_THRESHOLD = 0.1e18; // 10%
+    uint256 private constant MAX_TWAP_PERIOD = 1 hours;
+    uint256 private constant WAD = 1e18;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       EVENTS                                              //
