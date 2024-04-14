@@ -12,8 +12,9 @@ import {
 import { QueryProcessor, ReservoirPair, Buffer } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
+import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
 
-contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
+contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using QueryProcessor for ReservoirPair;
     using Utils for address;
 
@@ -36,6 +37,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
     function getTimeWeightedAverage(OracleAverageQuery[] memory aQueries)
         external
         view
+        nonReentrant
         returns (uint256[] memory rResults)
     {
         rResults = new uint256[](aQueries.length);
@@ -43,8 +45,8 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
         OracleAverageQuery memory lQuery;
         for (uint256 i = 0; i < aQueries.length; ++i) {
             lQuery = aQueries[i];
-            (address token0, address token1) = lQuery.base.sortTokens(lQuery.quote);
-            ReservoirPair lPair = pairs[token0][token1];
+            (address lToken0, address lToken1) = lQuery.base.sortTokens(lQuery.quote);
+            ReservoirPair lPair = pairs[lToken0][lToken1];
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
@@ -53,19 +55,20 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
         }
     }
 
-    function getLatest(OracleLatestQuery calldata aQuery) external view returns (uint256) {
-        (address token0, address token1) = aQuery.base.sortTokens(aQuery.quote);
-        ReservoirPair lPair = pairs[token0][token1];
+    function getLatest(OracleLatestQuery calldata aQuery) external view nonReentrant returns (uint256) {
+        (address lToken0, address lToken1) = aQuery.base.sortTokens(aQuery.quote);
+        ReservoirPair lPair = pairs[lToken0][lToken1];
         _validatePair(lPair);
 
         (,,, uint256 lIndex) = lPair.getReserves();
-        uint256 lResult = lPair.getInstantValue(aQuery.variable, lIndex, token0 == aQuery.quote);
+        uint256 lResult = lPair.getInstantValue(aQuery.variable, lIndex, lToken0 == aQuery.quote);
         return lResult;
     }
 
     function getPastAccumulators(OracleAccumulatorQuery[] memory aQueries)
         external
         view
+        nonReentrant
         returns (int256[] memory rResults)
     {
         rResults = new int256[](aQueries.length);
@@ -73,8 +76,8 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
         OracleAccumulatorQuery memory query;
         for (uint256 i = 0; i < aQueries.length; ++i) {
             query = aQueries[i];
-            (address token0, address token1) = query.base.sortTokens(query.quote);
-            ReservoirPair lPair = pairs[token0][token1];
+            (address lToken0, address lToken1) = query.base.sortTokens(query.quote);
+            ReservoirPair lPair = pairs[lToken0][lToken1];
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
@@ -100,10 +103,19 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender) {
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     // sets a specific pair to serve as price feed for a certain route
-    function setPairForRoute(address aToken0, address aToken1, ReservoirPair aPair) external onlyOwner {
+    // TODO: actually is it necessary to have so many args? Maybe all we need is whitelistPair(ReservoirPair)
+    function setPairForRoute(address aToken0, address aToken1, ReservoirPair aPair) external nonReentrant onlyOwner {
         (aToken0, aToken1) = aToken0.sortTokens(aToken1);
+        assert(aToken0 == aPair.token0() && aToken1 == aPair.token1());
 
         pairs[aToken0][aToken1] = aPair;
         emit Route(aToken0, aToken1, aPair);
+    }
+
+    function clearRoute(address aToken0, address aToken1) external onlyOwner {
+        (aToken0, aToken1) = aToken0.sortTokens(aToken1);
+
+        pairs[aToken0][aToken1] = address(0);
+        emit Route(aToken0, aToken1, address(0));
     }
 }

@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 library Utils {
     /// @dev Square of 1e18 (WAD)
-    uint256 internal constant WAD2 = 1e36;
+    uint256 internal constant WAD_SQUARED = 1e36;
 
     error PriceOutOfRange();
 
@@ -13,8 +13,8 @@ library Utils {
     }
 
     function invertWad(uint256 x) internal pure returns (uint256) {
-        if (x > WAD2 || x == 0) revert PriceOutOfRange();
+        if (x > WAD_SQUARED || x == 0) revert PriceOutOfRange();
 
-        return WAD2 / x;
+        return WAD_SQUARED / x;
     }
 }
