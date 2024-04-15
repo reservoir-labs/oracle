@@ -222,7 +222,7 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
 
         if (lPrice == 0) revert PO_NoPath();
 
-        // can build a cache of decimals to save on making these external calls?
+        // idea: can build a cache of decimals to save on making external calls?
         uint256 lBaseDecimals = IERC20(aBase).decimals();
         uint256 lQuoteDecimals = IERC20(aQuote).decimals();
 
