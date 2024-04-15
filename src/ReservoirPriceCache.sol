@@ -125,10 +125,6 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
 
     // IPriceOracle
 
-    function name() external view returns (string memory) {
-        return "RESERVOIR PRICE CACHE";
-    }
-
     function getQuote(uint256 aAmount, address aBase, address aQuote)
         external
         view
