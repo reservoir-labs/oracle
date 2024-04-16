@@ -2,9 +2,13 @@
 pragma solidity ^0.8.0;
 
 import { BaseTest, console2 } from "test/__fixtures/BaseTest.t.sol";
-import { ReservoirPriceCache, IReservoirPriceOracle } from "src/ReservoirPriceCache.sol";
+import { ReservoirPriceCache, IReservoirPriceOracle, IPriceOracle } from "src/ReservoirPriceCache.sol";
+
+import { Utils } from "src/libraries/Utils.sol";
 
 contract ReservoirPriceCacheTest is BaseTest {
+    using Utils for uint256;
+
     ReservoirPriceCache internal _priceCache = new ReservoirPriceCache(address(0), 0.02e18, 15 minutes, 2e18);
 
     event Oracle(address newOracle);
@@ -78,18 +82,46 @@ contract ReservoirPriceCacheTest is BaseTest {
     function testGetQuote_Inverse(uint256 aPrice, uint256 aAmountIn) external {
         // assume
         uint256 lPrice = bound(aPrice, 1, 1e36);
+        uint256 lAmountIn = bound(aAmountIn, 100, 100_000_000_000e18);
 
         // arrange
         _writePriceCache(address(_tokenA), address(_tokenB), lPrice);
 
         // act
-        uint256 lAmountOut = _priceCache.getQuote(567e18, address(_tokenB), address(_tokenA));
+        uint256 lAmountOut = _priceCache.getQuote(lAmountIn, address(_tokenB), address(_tokenA));
 
         // assert
-        console2.log(lAmountOut);
+        assertEq(lAmountOut, lAmountIn * lPrice.invertWad() * 10 ** _tokenA.decimals() / 10 ** _tokenB.decimals() / 1e18);
     }
 
     function testGetQuote_MultipleHops() external {
+        // assume
+        uint256 lPriceAB = 1e18;
+        uint256 lPriceBC = 2e18;
+        uint256 lPriceCD = 4e18;
+
+        // arrange
+        _writePriceCache(address(_tokenA), address(_tokenB), lPriceAB);
+        _writePriceCache(address(_tokenB), address(_tokenC), lPriceBC);
+        _writePriceCache(address(_tokenC), address(_tokenD), lPriceCD);
+
+        address[] memory lRoute = new address[](4);
+        lRoute[0] = address(_tokenA);
+        lRoute[1] = address(_tokenB);
+        lRoute[2] = address(_tokenC);
+        lRoute[3] = address(_tokenD);
+        _priceCache.setRoute(address(_tokenA), address(_tokenD), lRoute);
+
+        uint256 lAmountIn = 789e6;
+
+        // act
+        uint256 lAmountOut = _priceCache.getQuote(lAmountIn, address(_tokenA), address(_tokenD));
+
+        // assert
+        assertEq(lAmountOut, 0);
+    }
+
+    function testGetQuote_MultipleHops_Inverse() external {
 
     }
 
@@ -267,9 +299,9 @@ contract ReservoirPriceCacheTest is BaseTest {
         _priceCache.updateOracle(address(345));
     }
 
-    function testGetQuote_Null() external {
+    function testGetQuote_NoPath() external {
         // act & assert
-        vm.expectRevert(); // TODO: use specific error
+        vm.expectRevert(IPriceOracle.PO_NoPath.selector);
         _priceCache.getQuote(123, address(123), address(456));
     }
 }
