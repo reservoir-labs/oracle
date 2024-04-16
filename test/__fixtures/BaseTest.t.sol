@@ -17,11 +17,19 @@ contract BaseTest is Test {
     GenericFactory internal _factory = new GenericFactory();
     ReservoirPair internal _pair;
 
-    MintableERC20 internal _tokenA = new MintableERC20("TokenA", "TA", 6);
-    MintableERC20 internal _tokenB = new MintableERC20("TokenB", "TB", 18);
-    MintableERC20 internal _tokenC = new MintableERC20("TokenB", "TC", 10);
+    MintableERC20 internal _tokenA = MintableERC20(address(0x100));
+    MintableERC20 internal _tokenB = MintableERC20(address(0x200));
+    MintableERC20 internal _tokenC = MintableERC20(address(0x300));
+    MintableERC20 internal _tokenD = MintableERC20(address(0x400));
+    //new MintableERC20("TokenD", "TD", 6);
 
     constructor() {
+        // we do this to have certainty that these token addresses are in ascending order, for easy testing
+        deployCodeTo("MintableERC20.sol", abi.encode("TokenA", "TA", uint8(6)), address(0x100));
+        deployCodeTo("MintableERC20.sol", abi.encode("TokenB", "TB", uint8(18)), address(0x200));
+        deployCodeTo("MintableERC20.sol", abi.encode("TokenC", "TC", uint8(10)), address(0x300));
+        deployCodeTo("MintableERC20.sol", abi.encode("TokenD", "TD", uint8(6)), address(0x400));
+
         _factory.addCurve(type(ConstantProductPair).creationCode);
         _factory.addCurve(type(StablePair).creationCode);
 
