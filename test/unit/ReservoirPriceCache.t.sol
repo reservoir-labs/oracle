@@ -94,106 +94,124 @@ contract ReservoirPriceCacheTest is Test {
     function testUpdatePrice_BeyondThreshold() external { }
     function testUpdatePrice_WithinThreshold() external { }
 
-    function testSetRoute() external {
+    function testSetRoute() public {
         // arrange
-        address aToken0 = address(0x1);
-        address aToken1 = address(0x2);
+        address lToken0 = address(0x1);
+        address lToken1 = address(0x2);
         address[] memory lRoute = new address[](2);
-        lRoute[0] = aToken0;
-        lRoute[1] = aToken1;
+        lRoute[0] = lToken0;
+        lRoute[1] = lToken1;
 
         // act
         vm.expectEmit(false, false, false, false);
-        emit Route(aToken0, aToken1, lRoute);
-        _priceCache.setRoute(aToken0, aToken1, lRoute);
+        emit Route(lToken0, lToken1, lRoute);
+        _priceCache.setRoute(lToken0, lToken1, lRoute);
 
         // assert
-        address[] memory lQueriedRoute = _priceCache.route(aToken0, aToken1);
+        address[] memory lQueriedRoute = _priceCache.route(lToken0, lToken1);
         assertEq(lQueriedRoute, lRoute);
     }
 
-    function testSetRoute_OverwriteExisting() external { }
+    function testSetRoute_OverwriteExisting() external {
+        // arrange
+        testSetRoute();
+        address lToken0 = address(0x1);
+        address lToken1 = address(0x2);
+        address[] memory lRoute = new address[](4);
+        lRoute[0] = lToken0;
+        lRoute[1] = address(5);
+        lRoute[2] = address(6);
+        lRoute[3] = lToken1;
+
+        // act
+        _priceCache.setRoute(lToken0, lToken1, lRoute);
+
+        // assert
+        address[] memory lQueriedRoute = _priceCache.route(lToken0, lToken1);
+        assertEq(lQueriedRoute, lRoute);
+        assertEq(lQueriedRoute.length, 4);
+    }
 
     function testSetRoute_SameToken() external {
         // arrange
-        address aToken0 = address(0x1);
-        address aToken1 = address(0x1);
+        address lToken0 = address(0x1);
+        address lToken1 = address(0x1);
         address[] memory lRoute = new address[](2);
-        lRoute[0] = aToken0;
-        lRoute[1] = aToken1;
+        lRoute[0] = lToken0;
+        lRoute[1] = lToken1;
 
         // act & assert
         vm.expectRevert(ReservoirPriceCache.RPC_SAME_TOKEN.selector);
-        _priceCache.setRoute(aToken0, aToken1, lRoute);
+        _priceCache.setRoute(lToken0, lToken1, lRoute);
     }
 
     function testSetRoute_NotSorted() external {
         // arrange
-        address aToken0 = address(0x21);
-        address aToken1 = address(0x2);
+        address lToken0 = address(0x21);
+        address lToken1 = address(0x2);
         address[] memory lRoute = new address[](2);
-        lRoute[0] = aToken0;
-        lRoute[1] = aToken1;
+        lRoute[0] = lToken0;
+        lRoute[1] = lToken1;
 
         // act & assert
         vm.expectRevert(ReservoirPriceCache.RPC_TOKENS_UNSORTED.selector);
-        _priceCache.setRoute(aToken0, aToken1, lRoute);
+        _priceCache.setRoute(lToken0, lToken1, lRoute);
     }
 
     function testSetRoute_InvalidRouteLength() external {
         // arrange
-        address aToken0 = address(0x1);
-        address aToken1 = address(0x2);
+        address lToken0 = address(0x1);
+        address lToken1 = address(0x2);
         address[] memory lTooLong = new address[](5);
-        lTooLong[0] = aToken0;
+        lTooLong[0] = lToken0;
         lTooLong[1] = address(0);
         lTooLong[2] = address(0);
         lTooLong[3] = address(0);
-        lTooLong[4] = aToken1;
+        lTooLong[4] = lToken1;
         address[] memory lTooShort = new address[](1);
-        lTooShort[0] = aToken0;
+        lTooShort[0] = lToken0;
 
         // act & assert
         vm.expectRevert(ReservoirPriceCache.RPC_INVALID_ROUTE_LENGTH.selector);
-        _priceCache.setRoute(aToken0, aToken1, lTooLong);
+        _priceCache.setRoute(lToken0, lToken1, lTooLong);
 
         // act & assert
         vm.expectRevert(ReservoirPriceCache.RPC_INVALID_ROUTE_LENGTH.selector);
-        _priceCache.setRoute(aToken0, aToken1, lTooShort);
+        _priceCache.setRoute(lToken0, lToken1, lTooShort);
     }
 
     function testSetRoute_InvalidRoute() external {
         // arrange
-        address aToken0 = address(0x1);
-        address aToken1 = address(0x2);
+        address lToken0 = address(0x1);
+        address lToken1 = address(0x2);
         address[] memory lRoute = new address[](3);
-        lRoute[0] = aToken0;
-        lRoute[1] = aToken1;
+        lRoute[0] = lToken0;
+        lRoute[1] = lToken1;
         lRoute[2] = address(0);
 
         // act & assert
         vm.expectRevert(ReservoirPriceCache.RPC_INVALID_ROUTE.selector);
-        _priceCache.setRoute(aToken0, aToken1, lRoute);
+        _priceCache.setRoute(lToken0, lToken1, lRoute);
     }
 
     function testClearRoute() external {
         // arrange
-        address aToken0 = address(0x1);
-        address aToken1 = address(0x2);
+        address lToken0 = address(0x1);
+        address lToken1 = address(0x2);
         address[] memory lRoute = new address[](2);
-        lRoute[0] = aToken0;
-        lRoute[1] = aToken1;
-        _priceCache.setRoute(aToken0, aToken1, lRoute);
-        address[] memory lQueriedRoute = _priceCache.route(aToken0, aToken1);
+        lRoute[0] = lToken0;
+        lRoute[1] = lToken1;
+        _priceCache.setRoute(lToken0, lToken1, lRoute);
+        address[] memory lQueriedRoute = _priceCache.route(lToken0, lToken1);
         assertEq(lQueriedRoute, lRoute);
 
         // act
         vm.expectEmit(false, false, false, false);
-        emit Route(aToken0, aToken1, new address[](0));
-        _priceCache.clearRoute(aToken0, aToken1);
+        emit Route(lToken0, lToken1, new address[](0));
+        _priceCache.clearRoute(lToken0, lToken1);
 
         // assert
-        lQueriedRoute = _priceCache.route(aToken0, aToken1);
+        lQueriedRoute = _priceCache.route(lToken0, lToken1);
         assertEq(lQueriedRoute, new address[](0));
     }
 }
