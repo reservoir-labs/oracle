@@ -37,8 +37,10 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), Reent
     function getTimeWeightedAverage(OracleAverageQuery[] memory aQueries)
         external
         view
-        nonReentrant
-        returns (uint256[] memory rResults)
+        returns (
+            // nonReentrant
+            uint256[] memory rResults
+        )
     {
         rResults = new uint256[](aQueries.length);
 
@@ -55,7 +57,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), Reent
         }
     }
 
-    function getLatest(OracleLatestQuery calldata aQuery) external view nonReentrant returns (uint256) {
+    function getLatest(OracleLatestQuery calldata aQuery) external view /*nonReentrant*/ returns (uint256) {
         (address lToken0, address lToken1) = aQuery.base.sortTokens(aQuery.quote);
         ReservoirPair lPair = pairs[lToken0][lToken1];
         _validatePair(lPair);
@@ -68,8 +70,10 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), Reent
     function getPastAccumulators(OracleAccumulatorQuery[] memory aQueries)
         external
         view
-        nonReentrant
-        returns (int256[] memory rResults)
+        returns (
+            // nonReentrant
+            int256[] memory rResults
+        )
     {
         rResults = new int256[](aQueries.length);
 
@@ -106,7 +110,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), Reent
     // TODO: actually is it necessary to have so many args? Maybe all we need is whitelistPair(ReservoirPair)
     function setPairForRoute(address aToken0, address aToken1, ReservoirPair aPair) external nonReentrant onlyOwner {
         (aToken0, aToken1) = aToken0.sortTokens(aToken1);
-        assert(aToken0 == aPair.token0() && aToken1 == aPair.token1());
+        assert(aToken0 == address(aPair.token0()) && aToken1 == address(aPair.token1()));
 
         pairs[aToken0][aToken1] = aPair;
         emit Route(aToken0, aToken1, aPair);
@@ -115,7 +119,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), Reent
     function clearRoute(address aToken0, address aToken1) external onlyOwner {
         (aToken0, aToken1) = aToken0.sortTokens(aToken1);
 
-        pairs[aToken0][aToken1] = address(0);
-        emit Route(aToken0, aToken1, address(0));
+        delete pairs[aToken0][aToken1];
+        emit Route(aToken0, aToken1, ReservoirPair(address(0)));
     }
 }

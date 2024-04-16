@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
+import { IERC20 } from "forge-std/interfaces/IERC20.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
-import { FixedPointMathLib } from "lib/amm-core/lib/solmate/src/utils/FixedPointMathLib.sol";
+import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
 
 import {
     IReservoirPriceOracle,
@@ -26,6 +27,7 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     uint256 private constant MAX_DEVIATION_THRESHOLD = 0.1e18; // 10%
     uint256 private constant MAX_TWAP_PERIOD = 1 hours;
     uint256 private constant WAD = 1e18;
+    uint256 private constant MAX_ROUTE_LENGTH = 4;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       EVENTS                                              //
@@ -36,6 +38,7 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     event PriceDeviationThreshold(uint256 newThreshold);
     event RewardMultiplier(uint256 newMultiplier);
     event Price(address token0, address token1, uint256 price);
+    event Route(address token0, address token1, address[] route);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       ERRORS                                              //
@@ -44,6 +47,9 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     error RPC_THRESHOLD_TOO_HIGH();
     error RPC_TWAP_PERIOD_TOO_HIGH();
     error RPC_SAME_TOKEN();
+    error RPC_TOKENS_UNSORTED();
+    error RPC_INVALID_ROUTE_LENGTH();
+    error RPC_INVALID_ROUTE();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
@@ -65,6 +71,8 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     // the latest cached TWAP of token1/token0, where address of token0 is strictly less than address of token1
     // calculate reciprocal to for price of token0/token1
     mapping(address token0 => mapping(address token1 => uint256 price)) public priceCache;
+
+    mapping(address token0 => mapping(address token1 => address[] path)) private _route;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                CONSTRUCTOR, FALLBACKS                                     //
@@ -123,14 +131,34 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
         emit RewardMultiplier(aNewMultiplier);
     }
 
+    function setRoute(address aToken0, address aToken1, address[] calldata aRoute) external onlyOwner {
+        if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
+        if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
+        if (aRoute.length > MAX_ROUTE_LENGTH || aRoute.length < 2) revert RPC_INVALID_ROUTE_LENGTH();
+        if (aRoute[0] != aToken0 || aRoute[aRoute.length - 1] != aToken1) revert RPC_INVALID_ROUTE();
+
+        _route[aToken0][aToken1] = aRoute;
+        emit Route(aToken0, aToken1, aRoute);
+    }
+
+    function clearRoute(address aToken0, address aToken1) external onlyOwner {
+        if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
+        if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
+
+        delete _route[aToken0][aToken1];
+        emit Route(aToken0, aToken1, new address[](0));
+    }
+
     // IPriceOracle
 
     function getQuote(uint256 aAmount, address aBase, address aQuote)
         external
         view
         validateTokens(aBase, aQuote)
-        nonReentrant
-        returns (uint256 rOut)
+        returns (
+            // nonReentrant
+            uint256 rOut
+        )
     {
         rOut = _getQuote(aAmount, aBase, aQuote);
     }
@@ -139,8 +167,11 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
         external
         view
         validateTokens(aBase, aQuote)
-        nonReentrant
-        returns (uint256 rBidOut, uint256 rAskOut)
+        returns (
+            // nonReentrant
+            uint256 rBidOut,
+            uint256 rAskOut
+        )
     {
         uint256 lResult = _getQuote(aAmount, aBase, aQuote);
         (rBidOut, rAskOut) = (lResult, lResult);
@@ -154,6 +185,10 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
 
     function gasBountyAvailable() external view returns (uint256) {
         return address(this).balance;
+    }
+
+    function route(address aToken0, address aToken1) external view returns (address[] memory) {
+        return _route[aToken0][aToken1];
     }
 
     // @param aRewardRecipient The beneficiary of the reward. Must implement the receive function if is a contract address
