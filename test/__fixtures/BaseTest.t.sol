@@ -19,6 +19,7 @@ contract BaseTest is Test {
 
     MintableERC20 internal _tokenA = new MintableERC20("TokenA", "TA", 6);
     MintableERC20 internal _tokenB = new MintableERC20("TokenB", "TB", 18);
+    MintableERC20 internal _tokenC = new MintableERC20("TokenB", "TC", 10);
 
     constructor() {
         _factory.addCurve(type(ConstantProductPair).creationCode);

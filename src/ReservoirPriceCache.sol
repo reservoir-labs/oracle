@@ -19,6 +19,7 @@ import { Utils } from "src/libraries/Utils.sol";
 contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle {
     using FixedPointMathLib for uint256;
     using Utils for address;
+    using Utils for uint256;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       CONSTANTS                                           //
@@ -131,6 +132,13 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
         emit RewardMultiplier(aNewMultiplier);
     }
 
+    /// @notice Sets the price route between aToken0 and aToken1, and also intermediate routes if previously undefined
+    /// @param aToken0 Address of the lower token
+    /// @param aToken1 Address of the higher token
+    /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived
+    // should we make this recursive, meaning for a route A-B-C-D
+    // besides defining A-D, A-B, B-C, and C-D, we also define
+    // A-B-C, B-C-D ?
     function setRoute(address aToken0, address aToken1, address[] calldata aRoute) external onlyOwner {
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
@@ -139,6 +147,25 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
 
         _route[aToken0][aToken1] = aRoute;
         emit Route(aToken0, aToken1, aRoute);
+
+        // iteratively define those subroutes if undefined
+        if (aRoute.length > 2) {
+            for (uint i = 0; i < aRoute.length - 1; ++i) {
+                (address lLowerToken, address lHigherToken) = aRoute[i].sortTokens(aRoute[i+1]);
+
+                // if route is undefined
+                address[] memory lExisting = _route[lLowerToken][lHigherToken];
+                if (lExisting.length == 0) {
+                    address[] memory lSubroute = new address[](2);
+                    lSubroute[0] = lLowerToken;
+                    lSubroute[1] = lHigherToken;
+
+                    _route[lLowerToken][lHigherToken] = lSubroute;
+                    emit Route(lLowerToken, lHigherToken, lSubroute);
+                }
+            }
+        }
+        // should we update prices right after setting the route?
     }
 
     function clearRoute(address aToken0, address aToken1) external onlyOwner {
@@ -249,9 +276,25 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
-        uint256 lPrice = priceCache[lToken0][lToken1];
+        address[] memory lRoute = _route[lToken0][lToken1];
+        if (lRoute.length == 0) revert PO_NoPath();
 
-        if (lPrice == 0) revert PO_NoPath();
+        uint256 lPrice;
+        if (lRoute.length == 2) {
+            lPrice = lToken0 == aBase ? priceCache[lToken0][lToken1] : priceCache[lToken0][lToken1].invertWad();
+        } else if (lRoute.length > 2) {
+            lPrice = WAD;
+            for (uint i = 0; i < lRoute.length - 1; ++ i) {
+                // we need to sort token addresses again since intermediate path addresses are not guaranteed to be sorted
+                (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i+1]);
+
+                // it is assumed that subroutes defined here are simple routes and not composite routes
+                // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
+                // therefore we do not check _route again to ensure that there is indeed a route
+                uint256 lRoutePrice = priceCache[lLowerToken][lHigherToken];
+                lPrice *= lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad();
+            }
+        }
 
         // idea: can build a cache of decimals to save on making external calls?
         uint256 lBaseDecimals = IERC20(aBase).decimals();
