@@ -14,6 +14,7 @@ contract QueryProcessorTest is BaseTest {
 
     constructor() {
         _factory.write("Shared::oracleCaller", address(_queryProcessor));
+        _pair.updateOracleCaller();
     }
 
     // TODO: test both negative and positive acc values
