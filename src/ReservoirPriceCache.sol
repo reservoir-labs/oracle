@@ -70,7 +70,8 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     uint64 public twapPeriod;
 
     /// @notice The latest cached geometric TWAP of token1/token0, where the address of token0 is strictly less than the address of token1
-    /// Stored in the form of a 18 decimal fixed point number
+    /// Stored in the form of a 18 decimal fixed point number.
+    /// Supported price range: 1wei to 1e36, due to the need to support inverting price via `Utils.invertWad`
     /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
     mapping(address token0 => mapping(address token1 => uint256 price)) public priceCache;
 
@@ -294,6 +295,7 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
                 // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
                 // therefore we do not check _route again to ensure that there is indeed a route
                 uint256 lRoutePrice = priceCache[lLowerToken][lHigherToken];
+                // TOOD: prolly need to divide by wad here at each step
                 lPrice *= lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad();
             }
         }
@@ -303,6 +305,7 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
         uint256 lQuoteDecimals = IERC20(aQuote).decimals();
 
         // quoteAmountOut = baseAmountIn * wadPrice * quoteDecimalScale / baseDecimalScale / WAD
+        // TODO: run debugger to see where it is overflowing + how lPrice is calculated for multihops
         rOut = (aAmount * lPrice).fullMulDiv(10 ** lQuoteDecimals, (10 ** lBaseDecimals) * WAD);
     }
 }

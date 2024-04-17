@@ -21,14 +21,13 @@ contract BaseTest is Test {
     MintableERC20 internal _tokenB = MintableERC20(address(0x200));
     MintableERC20 internal _tokenC = MintableERC20(address(0x300));
     MintableERC20 internal _tokenD = MintableERC20(address(0x400));
-    //new MintableERC20("TokenD", "TD", 6);
 
     constructor() {
         // we do this to have certainty that these token addresses are in ascending order, for easy testing
-        deployCodeTo("MintableERC20.sol", abi.encode("TokenA", "TA", uint8(6)), address(0x100));
-        deployCodeTo("MintableERC20.sol", abi.encode("TokenB", "TB", uint8(18)), address(0x200));
-        deployCodeTo("MintableERC20.sol", abi.encode("TokenC", "TC", uint8(10)), address(0x300));
-        deployCodeTo("MintableERC20.sol", abi.encode("TokenD", "TD", uint8(6)), address(0x400));
+        deployCodeTo("MintableERC20.sol", abi.encode("TokenA", "TA", uint8(6)), address(_tokenA));
+        deployCodeTo("MintableERC20.sol", abi.encode("TokenB", "TB", uint8(18)), address(_tokenB));
+        deployCodeTo("MintableERC20.sol", abi.encode("TokenC", "TC", uint8(10)), address(_tokenC));
+        deployCodeTo("MintableERC20.sol", abi.encode("TokenD", "TD", uint8(6)), address(_tokenD));
 
         _factory.addCurve(type(ConstantProductPair).creationCode);
         _factory.addCurve(type(StablePair).creationCode);
