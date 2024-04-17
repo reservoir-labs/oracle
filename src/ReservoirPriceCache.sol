@@ -69,10 +69,12 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     /// @notice TWAP period for querying the oracle in seconds
     uint64 public twapPeriod;
 
-    // the latest cached TWAP of token1/token0, where address of token0 is strictly less than address of token1
-    // calculate reciprocal to for price of token0/token1
+    /// @notice The latest cached geometric TWAP of token1/token0, where the address of token0 is strictly less than the address of token1
+    /// Stored in the form of a 18 decimal fixed point number
+    /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
     mapping(address token0 => mapping(address token1 => uint256 price)) public priceCache;
 
+    /// @notice Defines the route to determine price of token0, where the address of token0 is strictly less than the address of token1
     mapping(address token0 => mapping(address token1 => address[] path)) private _route;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
