@@ -27,8 +27,8 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
 
     uint256 private constant MAX_DEVIATION_THRESHOLD = 0.1e18; // 10%
     uint256 private constant MAX_TWAP_PERIOD = 1 hours;
-    uint256 private constant WAD = 1e18;
     uint256 private constant MAX_ROUTE_LENGTH = 4;
+    uint256 private constant WAD = 1e18;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       EVENTS                                              //
@@ -153,8 +153,8 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
 
         // iteratively define those subroutes if undefined
         if (aRoute.length > 2) {
-            for (uint i = 0; i < aRoute.length - 1; ++i) {
-                (address lLowerToken, address lHigherToken) = aRoute[i].sortTokens(aRoute[i+1]);
+            for (uint256 i = 0; i < aRoute.length - 1; ++i) {
+                (address lLowerToken, address lHigherToken) = aRoute[i].sortTokens(aRoute[i + 1]);
 
                 // if route is undefined
                 address[] memory lExisting = _route[lLowerToken][lHigherToken];
@@ -284,19 +284,18 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
 
         uint256 lPrice;
         if (lRoute.length == 2) {
-            lPrice = lToken0 == aBase ? priceCache[lToken0][lToken1] : priceCache[lToken0][lToken1].invertWad();
+            lPrice = priceCache[lToken0][lToken1];
         } else if (lRoute.length > 2) {
             lPrice = WAD;
-            for (uint i = 0; i < lRoute.length - 1; ++ i) {
+            for (uint256 i = 0; i < lRoute.length - 1; ++i) {
                 // we need to sort token addresses again since intermediate path addresses are not guaranteed to be sorted
-                (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i+1]);
+                (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
 
                 // it is assumed that subroutes defined here are simple routes and not composite routes
                 // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
-                // therefore we do not check _route again to ensure that there is indeed a route
+                // therefore we do not check `_route` again to ensure that there is indeed a route
                 uint256 lRoutePrice = priceCache[lLowerToken][lHigherToken];
-                // TOOD: prolly need to divide by wad here at each step
-                lPrice *= lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad();
+                lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
             }
         }
 
@@ -304,8 +303,8 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
         uint256 lBaseDecimals = IERC20(aBase).decimals();
         uint256 lQuoteDecimals = IERC20(aQuote).decimals();
 
+        lPrice = lToken0 == aBase ? lPrice : lPrice.invertWad();
         // quoteAmountOut = baseAmountIn * wadPrice * quoteDecimalScale / baseDecimalScale / WAD
-        // TODO: run debugger to see where it is overflowing + how lPrice is calculated for multihops
         rOut = (aAmount * lPrice).fullMulDiv(10 ** lQuoteDecimals, (10 ** lBaseDecimals) * WAD);
     }
 }

@@ -20,7 +20,7 @@ contract ReservoirPriceCacheTest is BaseTest {
         require(aToken0 < aToken1, "tokens unsorted");
         vm.record();
         _priceCache.priceCache(aToken0, aToken1);
-        (bytes32[] memory lAccesses, ) = vm.accesses(address(_priceCache));
+        (bytes32[] memory lAccesses,) = vm.accesses(address(_priceCache));
         require(lAccesses.length == 1, "incorrect number of accesses");
 
         vm.store(address(_priceCache), lAccesses[0], bytes32(aPrice));
@@ -86,12 +86,15 @@ contract ReservoirPriceCacheTest is BaseTest {
 
         // arrange
         _writePriceCache(address(_tokenA), address(_tokenB), lPrice);
+        assertEq(_priceCache.priceCache(address(_tokenA), address(_tokenB)), lPrice);
 
         // act
         uint256 lAmountOut = _priceCache.getQuote(lAmountIn, address(_tokenB), address(_tokenA));
 
         // assert
-        assertEq(lAmountOut, lAmountIn * lPrice.invertWad() * 10 ** _tokenA.decimals() / 10 ** _tokenB.decimals() / 1e18);
+        assertEq(
+            lAmountOut, lAmountIn * lPrice.invertWad() * 10 ** _tokenA.decimals() / 10 ** _tokenB.decimals() / 1e18
+        );
     }
 
     function testGetQuote_MultipleHops() external {
@@ -118,11 +121,34 @@ contract ReservoirPriceCacheTest is BaseTest {
         uint256 lAmountOut = _priceCache.getQuote(lAmountIn, address(_tokenA), address(_tokenD));
 
         // assert
-        assertEq(lAmountOut, 0);
+        assertEq(lAmountOut, 6312e6);
     }
 
     function testGetQuote_MultipleHops_Inverse() external {
+        // assume
+        uint256 lPriceAB = 1e18;
+        uint256 lPriceBC = 2e18;
+        uint256 lPriceCD = 4e18;
 
+        // arrange
+        _writePriceCache(address(_tokenA), address(_tokenB), lPriceAB);
+        _writePriceCache(address(_tokenB), address(_tokenC), lPriceBC);
+        _writePriceCache(address(_tokenC), address(_tokenD), lPriceCD);
+
+        address[] memory lRoute = new address[](4);
+        lRoute[0] = address(_tokenA);
+        lRoute[1] = address(_tokenB);
+        lRoute[2] = address(_tokenC);
+        lRoute[3] = address(_tokenD);
+        _priceCache.setRoute(address(_tokenA), address(_tokenD), lRoute);
+
+        uint256 lAmountIn = 789e6;
+
+        // act
+        uint256 lAmountOut = _priceCache.getQuote(lAmountIn, address(_tokenD), address(_tokenA));
+
+        // assert
+        assertEq(lAmountOut, 98.625e6);
     }
 
     function testGetQuotes() external { }
@@ -292,6 +318,7 @@ contract ReservoirPriceCacheTest is BaseTest {
         vm.expectRevert("UNAUTHORIZED");
         _priceCache.updateRewardMultiplier(111);
     }
+
     function testUpdateOracle_NotOwner() external {
         // act & assert
         vm.prank(address(123));

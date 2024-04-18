@@ -49,5 +49,4 @@ contract BaseTest is Test {
     function _createPair(address aTokenA, address aTokenB, uint256 aCurveId) internal returns (address rPair) {
         rPair = _factory.createPair(IERC20(aTokenA), IERC20(aTokenB), aCurveId);
     }
-
 }
