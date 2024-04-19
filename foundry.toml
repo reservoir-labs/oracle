@@ -8,6 +8,7 @@ remappings = [
     "amm-core/=lib/amm-core/src/"
 ]
 match_path = "test/unit/*.sol"
+block_base_fee_per_gas = 10_000_000  # set to arbitrum's base fee of 0.01 gwei
 verbosity = 3
 fs_permissions = [
     { access = "read", path = "./out" }

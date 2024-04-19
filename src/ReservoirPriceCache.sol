@@ -46,11 +46,12 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     error RPC_THRESHOLD_TOO_HIGH();
-    error RPC_TWAP_PERIOD_TOO_HIGH();
+    error RPC_INVALID_TWAP_PERIOD();
     error RPC_SAME_TOKEN();
     error RPC_TOKENS_UNSORTED();
     error RPC_INVALID_ROUTE_LENGTH();
     error RPC_INVALID_ROUTE();
+    error RPC_UPDATE_PRICE_NOT_SIMPLE_ROUTE();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
@@ -123,8 +124,8 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     }
 
     function updateTwapPeriod(uint64 aNewPeriod) public onlyOwner {
-        if (aNewPeriod > MAX_TWAP_PERIOD) {
-            revert RPC_TWAP_PERIOD_TOO_HIGH();
+        if (aNewPeriod == 0 || aNewPeriod > MAX_TWAP_PERIOD) {
+            revert RPC_INVALID_TWAP_PERIOD();
         }
         twapPeriod = aNewPeriod;
         emit TwapPeriod(aNewPeriod);
@@ -217,7 +218,13 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
         return _route[aToken0][aToken1];
     }
 
-    // @param aRewardRecipient The beneficiary of the reward. Must implement the receive function if is a contract address
+    /// @notice Updates the TWAP price for all simple routes between `aTokenA` and `aTokenB`. Will also update intermediate routes if the route defined between
+    /// aTokenA and aTokenB is longer than 1 hop
+    /// However, if the route between aTokenA and aTokenB is composite route (more than 1 hop), no cache entry is written
+    /// for priceCache[aTokenA][aTokenB] but instead the prices of its constituent simple routes will be written.
+    /// @param aTokenA Address of one of the tokens for the price update. Does not have to be less than address of aTokenB
+    /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
+    /// @param aRewardRecipient The beneficiary of the reward. Must implement the receive function if is a smart contract address
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient)
         external
         validateTokens(aTokenA, aTokenB)
@@ -225,24 +232,31 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
     {
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
-        OracleAverageQuery[] memory lQueries;
-        lQueries[0] = OracleAverageQuery(
-            Variable.RAW_PRICE,
-            lToken0,
-            lToken1,
-            twapPeriod,
-            0 // now
-        );
+        address[] memory lRoute = _route[lToken0][lToken1];
+        if (lRoute.length == 0) revert PO_NoPath();
 
-        uint256 lNewPrice = oracle.getTimeWeightedAverage(lQueries)[0];
+        for (uint256 i = 0; i < lRoute.length - 1; ++i) {
+            (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
-        // determine if price has moved beyond the threshold, and pay out reward if so
-        if (_calcPercentageDiff(priceCache[lToken0][lToken1], lNewPrice) >= priceDeviationThreshold) {
-            _rewardUpdater(aRewardRecipient);
+            OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
+            lQueries[0] = OracleAverageQuery(
+                Variable.RAW_PRICE,
+                lToken0,
+                lToken1,
+                twapPeriod,
+                0 // now
+            );
+
+            uint256 lNewPrice = oracle.getTimeWeightedAverage(lQueries)[0];
+
+            // determine if price has moved beyond the threshold, and pay out reward if so
+            if (_calcPercentageDiff(priceCache[lToken0][lToken1], lNewPrice) >= priceDeviationThreshold) {
+                _rewardUpdater(aRewardRecipient);
+            }
+
+            priceCache[lToken0][lToken1] = lNewPrice;
+            emit Price(lToken0, lToken1, lNewPrice);
         }
-
-        priceCache[lToken0][lToken1] = lNewPrice;
-        emit Price(lToken0, lToken1, lNewPrice);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////

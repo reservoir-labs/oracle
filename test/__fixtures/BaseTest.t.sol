@@ -21,7 +21,7 @@ contract BaseTest is Test {
     ReservoirPair internal _pair;
 
     ReservoirPriceOracle internal _oracle = new ReservoirPriceOracle();
-    ReservoirPriceCache internal _priceCache = new ReservoirPriceCache(address(0), 0.02e18, 15 minutes, 500_000);
+    ReservoirPriceCache internal _priceCache = new ReservoirPriceCache(address(_oracle), 0.02e18, 15 minutes, 500_000);
 
     MintableERC20 internal _tokenA = MintableERC20(address(0x100));
     MintableERC20 internal _tokenB = MintableERC20(address(0x200));
@@ -45,6 +45,7 @@ contract BaseTest is Test {
         _factory.write("Shared::platformFeeTo", address(this));
         _factory.write("Shared::recoverer", address(this));
         _factory.write("Shared::maxChangeRate", Constants.DEFAULT_MAX_CHANGE_RATE);
+        _factory.write("Shared::oracleCaller", address(_oracle));
 
         _pair = ReservoirPair(_createPair(address(_tokenA), address(_tokenB), 0));
         _tokenA.mint(address(_pair), 103e6);

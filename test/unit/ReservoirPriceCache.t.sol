@@ -24,6 +24,16 @@ contract ReservoirPriceCacheTest is BaseTest {
         vm.store(address(_priceCache), lAccesses[0], bytes32(aPrice));
     }
 
+    constructor() {
+        // sanity - ensure that base fee is correct, for testing reward payout
+        assertEq(block.basefee, 0.01 gwei);
+
+        // make sure ether balance of test contract is 0
+        deal(address(this), 0);
+    }
+
+    receive() external payable { } // required to receive reward payout from priceCache
+
     function setUp() external {
         // define route
         address[] memory lRoute = new address[](2);
@@ -31,6 +41,7 @@ contract ReservoirPriceCacheTest is BaseTest {
         lRoute[1] = address(_tokenB);
 
         _priceCache.setRoute(address(_tokenA), address(_tokenB), lRoute);
+        _oracle.setPairForRoute(address(_tokenB), address(_tokenA), _pair);
     }
 
     function testGasBountyAvailable(uint256 aBountyAmount) external {
@@ -52,12 +63,12 @@ contract ReservoirPriceCacheTest is BaseTest {
         assertEq(_priceCache.gasBountyAvailable(), 0);
     }
 
-    function testGetQuote(uint256 aPrice, uint256 aAmountIn) external {
+    function testGetQuote(uint256 aPrice, uint256 aAmountIn) public {
         // assume
         uint256 lPrice = bound(aPrice, 1, 1e36);
         uint256 lAmountIn = bound(aAmountIn, 100, 10_000_000e6);
 
-        // arrange - write price to be 1 tokenA == 123 tokenB
+        // arrange
         _writePriceCache(address(_tokenA), address(_tokenB), lPrice);
 
         // act
@@ -139,7 +150,31 @@ contract ReservoirPriceCacheTest is BaseTest {
         assertEq(lAmountOut, 98.625e6);
     }
 
-    function testGetQuotes() external { }
+    function testGetQuotes(uint256 aPrice, uint256 aAmountIn) external {
+        // assume
+        uint256 lPrice = bound(aPrice, 1, 1e36);
+        uint256 lAmountIn = bound(aAmountIn, 100, 10_000_000e6);
+
+        // arrange
+        _writePriceCache(address(_tokenA), address(_tokenB), lPrice);
+
+        // act
+        (uint256 lBidOut, uint256 lAskOut) = _priceCache.getQuotes(lAmountIn, address(_tokenA), address(_tokenB));
+
+        // assert
+        assertEq(lBidOut, lAskOut);
+    }
+
+    function testGetQuote_ZeroIn() external {
+        // arrange
+        testGetQuote(1e18, 1_000_000e6);
+
+        // act
+        uint256 lAmountOut = _priceCache.getQuote(0, address(_tokenA), address(_tokenB));
+
+        // assert
+        assertEq(lAmountOut, 0);
+    }
 
     function testUpdateOracle() external {
         // arrange
@@ -154,8 +189,27 @@ contract ReservoirPriceCacheTest is BaseTest {
         assertEq(address(_priceCache.oracle()), lNewOracleAddress);
     }
 
-    function testUpdatePriceDeviationThreshold() external { }
-    function testUpdateTwapPeriod() external { }
+    function testUpdatePriceDeviationThreshold(uint256 aNewThreshold) external {
+        // assume
+        uint64 lNewThreshold = uint64(bound(aNewThreshold, 0, 0.1e18));
+
+        // act
+        _priceCache.updatePriceDeviationThreshold(lNewThreshold);
+
+        // assert
+        assertEq(_priceCache.priceDeviationThreshold(), lNewThreshold);
+    }
+
+    function testUpdateTwapPeriod(uint256 aNewPeriod) external {
+        // assume
+        uint64 lNewPeriod = uint64(bound(aNewPeriod, 1, 1 hours));
+
+        // act
+        _priceCache.updateTwapPeriod(lNewPeriod);
+
+        // assert
+        assertEq(_priceCache.twapPeriod(), lNewPeriod);
+    }
 
     function testUpdateRewardMultiplier() external {
         // arrange
@@ -170,8 +224,113 @@ contract ReservoirPriceCacheTest is BaseTest {
         assertEq(_priceCache.rewardMultiplier(), lNewRewardMultiplier);
     }
 
-    function testUpdatePrice_BeyondThreshold() external { }
-    function testUpdatePrice_WithinThreshold() external { }
+    function testUpdatePrice_FirstUpdate() external {
+        // sanity
+        assertEq(_priceCache.priceCache(address(_tokenA), address(_tokenB)), 0);
+
+        // arrange
+        deal(address(_priceCache), 1 ether);
+
+        skip(1);
+        _pair.sync();
+        skip(_priceCache.twapPeriod() * 2);
+        _tokenA.mint(address(_pair), 2e18);
+        _pair.swap(2e18, true, address(this), "");
+
+        // act
+        _priceCache.updatePrice(address(_tokenB), address(_tokenA), address(this));
+
+        // assert
+        assertEq(_priceCache.priceCache(address(_tokenA), address(_tokenB)), 98_918_868_099_219_913_512);
+        assertEq(_priceCache.priceCache(address(_tokenB), address(_tokenA)), 0);
+        assertEq(address(this).balance, 0); // there should be no reward for the first price update
+    }
+
+    function testUpdatePrice_WithinThreshold() external {
+        // arrange
+        _writePriceCache(address(_tokenA), address(_tokenB), 98.9223e18);
+        deal(address(_priceCache), 1 ether);
+
+        skip(1);
+        _pair.sync();
+        skip(_priceCache.twapPeriod() * 2);
+        _tokenA.mint(address(_pair), 2e18);
+        _pair.swap(2e18, true, address(this), "");
+
+        // act
+        _priceCache.updatePrice(address(_tokenB), address(_tokenA), address(this));
+
+        // assert
+        assertEq(_priceCache.priceCache(address(_tokenA), address(_tokenB)), 98_918_868_099_219_913_512);
+        assertEq(_priceCache.priceCache(address(_tokenB), address(_tokenA)), 0);
+        assertEq(address(this).balance, 0); // no reward since price is within threshold
+    }
+
+    function testUpdatePrice_BeyondThreshold(uint256 aRewardAvailable) external {
+        // assume
+        uint256 lRewardAvailable =
+            bound(aRewardAvailable, block.basefee * _priceCache.rewardMultiplier(), type(uint256).max);
+
+        // arrange
+        _writePriceCache(address(_tokenA), address(_tokenB), 5e18);
+        deal(address(_priceCache), 1 ether);
+
+        skip(1);
+        _pair.sync();
+        skip(_priceCache.twapPeriod() * 2);
+        _tokenA.mint(address(_pair), 2e18);
+        _pair.swap(2e18, true, address(this), "");
+
+        // act
+        _priceCache.updatePrice(address(_tokenB), address(_tokenA), address(this));
+
+        // assert
+        assertEq(_priceCache.priceCache(address(_tokenA), address(_tokenB)), 98_918_868_099_219_913_512);
+        assertEq(_priceCache.priceCache(address(_tokenB), address(_tokenA)), 0);
+        assertEq(address(this).balance, block.basefee * _priceCache.rewardMultiplier());
+    }
+
+    function testUpdatePrice_BeyondThreshold_InsufficientReward(uint256 aRewardAvailable) external {
+        // assume
+        uint256 lRewardAvailable = bound(aRewardAvailable, 1, block.basefee * _priceCache.rewardMultiplier() - 1);
+
+        // arrange
+        deal(address(_priceCache), lRewardAvailable);
+        _writePriceCache(address(_tokenA), address(_tokenB), 5e18);
+
+        skip(1);
+        _pair.sync();
+        skip(_priceCache.twapPeriod() * 2);
+        _tokenA.mint(address(_pair), 2e18);
+        _pair.swap(2e18, true, address(this), "");
+
+        // act
+        _priceCache.updatePrice(address(_tokenA), address(_tokenB), address(this));
+
+        // assert
+        assertEq(address(this).balance, 0); // no reward as there's insufficient ether in the contract
+    }
+
+    function testUpdatePrice_IntermediateRoutes() external {
+        // arrange
+        address lStart = address(_tokenA);
+        address lIntermediate1 = address(_tokenC);
+        address lIntermediate2 = address(_tokenD);
+        address lEnd = address(_tokenB);
+        address[] memory lRoute = new address[](4);
+        lRoute[0] = lStart;
+        lRoute[1] = lIntermediate1;
+        lRoute[2] = lIntermediate2;
+        lRoute[3] = lEnd;
+        _priceCache.setRoute(lStart, lEnd, lRoute);
+
+        // act
+        _priceCache.updatePrice(address(_tokenA), address(_tokenB), address(this));
+
+        // assert
+        uint256 lPrice = _priceCache.priceCache(lStart, lEnd);
+        //        assertEq();
+    }
 
     function testSetRoute() public {
         // arrange
@@ -211,7 +370,73 @@ contract ReservoirPriceCacheTest is BaseTest {
         assertEq(lQueriedRoute.length, 4);
     }
 
-    function testSetRoute_PopulateIntermediateRoute() external { }
+    function testSetRoute_MultipleHops() external {
+        // arrange
+        address lStart = address(0x1);
+        address lIntermediate1 = address(0x5);
+        address lIntermediate2 = address(0x3);
+        address lEnd = address(0x9);
+        address[] memory lRoute = new address[](4);
+        lRoute[0] = lStart;
+        lRoute[1] = lIntermediate1;
+        lRoute[2] = lIntermediate2;
+        lRoute[3] = lEnd;
+
+        address[] memory lIntermediateRoute1 = new address[](2);
+        lIntermediateRoute1[0] = lStart;
+        lIntermediateRoute1[1] = lIntermediate1;
+
+        // note that the seq should be reversed cuz lIntermediate2 < lIntermediate1
+        address[] memory lIntermediateRoute2 = new address[](2);
+        lIntermediateRoute2[0] = lIntermediate2;
+        lIntermediateRoute2[1] = lIntermediate1;
+
+        address[] memory lIntermediateRoute3 = new address[](2);
+        lIntermediateRoute3[0] = lIntermediate2;
+        lIntermediateRoute3[1] = lEnd;
+
+        // act
+        vm.expectEmit(false, false, false, true);
+        emit Route(lStart, lEnd, lRoute);
+        vm.expectEmit(false, false, false, true);
+        emit Route(lStart, lIntermediate1, lIntermediateRoute1);
+        vm.expectEmit(true, true, true, true);
+        // note the reverse seq here as well
+        emit Route(lIntermediate2, lIntermediate1, lIntermediateRoute2);
+        vm.expectEmit(false, false, false, true);
+        emit Route(lIntermediate2, lEnd, lIntermediateRoute3);
+        _priceCache.setRoute(lStart, lEnd, lRoute);
+
+        // assert
+        assertEq(_priceCache.route(lStart, lEnd), lRoute);
+        assertEq(_priceCache.route(lStart, lIntermediate1), lIntermediateRoute1);
+        assertEq(_priceCache.route(lIntermediate2, lIntermediate1), lIntermediateRoute2);
+        assertEq(_priceCache.route(lIntermediate2, lEnd), lIntermediateRoute3);
+    }
+
+    function testSetRoute_EndTokenJustGreaterThanStart() external {
+        // arrange
+        address lStart = address(0x1);
+        address lIntermediate1 = address(0x97);
+        address lIntermediate2 = address(0x58);
+        address lEnd = address(0x2);
+        address[] memory lRoute = new address[](4);
+        lRoute[0] = lStart;
+        lRoute[1] = lIntermediate1;
+        lRoute[2] = lIntermediate2;
+        lRoute[3] = lEnd;
+
+        address[] memory lIntermediateRoute1 = new address[](2);
+        lIntermediateRoute1[0] = lStart;
+        lIntermediateRoute1[1] = lIntermediate1;
+
+        // act
+        _priceCache.setRoute(lStart, lEnd, lRoute);
+
+        // assert
+        assertEq(_priceCache.route(lStart, lEnd), lRoute);
+        assertEq(_priceCache.route(lStart, lIntermediate1), lIntermediateRoute1);
+    }
 
     function testClearRoute() external {
         // arrange
@@ -237,6 +462,17 @@ contract ReservoirPriceCacheTest is BaseTest {
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                 ERROR CONDITIONS                                          //
     ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    function testUpdateTwapPeriod_InvalidTwapPeriod(uint256 aNewPeriod) external {
+        // assume
+        uint64 lNewPeriod = uint64(bound(aNewPeriod, 1 hours + 1, type(uint64).max));
+
+        // act & assert
+        vm.expectRevert(ReservoirPriceCache.RPC_INVALID_TWAP_PERIOD.selector);
+        _priceCache.updateTwapPeriod(lNewPeriod);
+        vm.expectRevert(ReservoirPriceCache.RPC_INVALID_TWAP_PERIOD.selector);
+        _priceCache.updateTwapPeriod(0);
+    }
 
     function testSetRoute_SameToken() external {
         // arrange
@@ -290,14 +526,21 @@ contract ReservoirPriceCacheTest is BaseTest {
         // arrange
         address lToken0 = address(0x1);
         address lToken1 = address(0x2);
-        address[] memory lRoute = new address[](3);
-        lRoute[0] = lToken0;
-        lRoute[1] = lToken1;
-        lRoute[2] = address(0);
+        address[] memory lInvalidRoute1 = new address[](3);
+        lInvalidRoute1[0] = lToken0;
+        lInvalidRoute1[1] = lToken1;
+        lInvalidRoute1[2] = address(0);
+
+        address[] memory lInvalidRoute2 = new address[](3);
+        lInvalidRoute2[0] = address(0);
+        lInvalidRoute2[1] = address(54);
+        lInvalidRoute2[2] = lToken1;
 
         // act & assert
         vm.expectRevert(ReservoirPriceCache.RPC_INVALID_ROUTE.selector);
-        _priceCache.setRoute(lToken0, lToken1, lRoute);
+        _priceCache.setRoute(lToken0, lToken1, lInvalidRoute1);
+        vm.expectRevert(ReservoirPriceCache.RPC_INVALID_ROUTE.selector);
+        _priceCache.setRoute(lToken0, lToken1, lInvalidRoute2);
     }
 
     function testUpdateRewardMultiplier_NotOwner() external {
