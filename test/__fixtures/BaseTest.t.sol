@@ -11,11 +11,17 @@ import { Constants } from "amm-core/Constants.sol";
 import { FactoryStoreLib } from "amm-core/libraries/FactoryStore.sol";
 import { MintableERC20 } from "lib/amm-core/test/__fixtures/MintableERC20.sol";
 
+import { ReservoirPriceOracle } from "src/ReservoirPriceOracle.sol";
+import { ReservoirPriceCache, IReservoirPriceOracle, IPriceOracle } from "src/ReservoirPriceCache.sol";
+
 contract BaseTest is Test {
     using FactoryStoreLib for GenericFactory;
 
     GenericFactory internal _factory = new GenericFactory();
     ReservoirPair internal _pair;
+
+    ReservoirPriceOracle internal _oracle = new ReservoirPriceOracle();
+    ReservoirPriceCache internal _priceCache = new ReservoirPriceCache(address(0), 0.02e18, 15 minutes, 500_000);
 
     MintableERC20 internal _tokenA = MintableERC20(address(0x100));
     MintableERC20 internal _tokenB = MintableERC20(address(0x200));

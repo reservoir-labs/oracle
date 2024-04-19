@@ -2,20 +2,18 @@
 pragma solidity ^0.8.0;
 
 import { BaseTest, console2 } from "test/__fixtures/BaseTest.t.sol";
-import { ReservoirPriceCache, IReservoirPriceOracle, IPriceOracle } from "src/ReservoirPriceCache.sol";
+import { ReservoirPriceCache, IPriceOracle } from "src/ReservoirPriceCache.sol";
 
 import { Utils } from "src/libraries/Utils.sol";
 
 contract ReservoirPriceCacheTest is BaseTest {
     using Utils for uint256;
 
-    ReservoirPriceCache internal _priceCache = new ReservoirPriceCache(address(0), 0.02e18, 15 minutes, 2e18);
-
     event Oracle(address newOracle);
     event RewardMultiplier(uint256 newMultiplier);
     event Route(address token0, address token1, address[] route);
 
-    // overwrites the cached prices, for easy testing
+    // writes the cached prices, for easy testing
     function _writePriceCache(address aToken0, address aToken1, uint256 aPrice) internal {
         require(aToken0 < aToken1, "tokens unsorted");
         vm.record();
