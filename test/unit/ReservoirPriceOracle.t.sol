@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import { BaseTest, console2, ReservoirPair } from "test/__fixtures/BaseTest.t.sol";
 
-import { Buffer } from "src/ReservoirPriceOracle.sol";
+import { Buffer, Variable, OracleLatestQuery } from "src/ReservoirPriceOracle.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     event Route(address token0, address token1, ReservoirPair pair);
@@ -11,8 +11,40 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testGetTimeWeightedAverage() external { }
     function testGetTimeWeightedAverage_Inverted() external { }
 
-    function testGetLatest() external { }
-    function testGetLatest_Inverted() external { }
+    function testGetLatest(uint32 aFastForward) public {
+        // assume - latest price should always be the same no matter how much time has elapsed
+        uint32 lFastForward = uint32(bound(aFastForward, 1, 2 ** 31 - 2));
+
+        // arrange
+        skip(lFastForward);
+        _pair.sync();
+        _oracle.setPairForRoute(address(_tokenA), address(_tokenB), _pair);
+
+        // act
+        uint256 lLatestPrice = _oracle.getLatest(OracleLatestQuery(
+            Variable.RAW_PRICE,
+            address(_tokenA),
+            address(_tokenB)
+        ));
+
+        // assert
+        assertEq(lLatestPrice, 98918868099219913512);
+    }
+
+    function testGetLatest_Inverted(uint32 aFastForward) external {
+        // arrange
+        testGetLatest(aFastForward);
+
+        // act
+        uint256 lLatestPrice = _oracle.getLatest(OracleLatestQuery(
+            Variable.RAW_PRICE,
+            address(_tokenB),
+            address(_tokenA)
+        ));
+
+        // assert
+        assertEq(lLatestPrice, 0.010109294811147218e18);
+    }
 
     function testGetPastAccumulator() external { }
     function testGetPastAccumulator_Inverted() external { }

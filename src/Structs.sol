@@ -21,7 +21,7 @@ struct OracleAverageQuery {
 /**
  * @dev Information for a query for the latest variable
  *
- * TODO: fill this in
+ * Each query computes the latest instantaneous variable.
  */
 struct OracleLatestQuery {
     Variable variable;
