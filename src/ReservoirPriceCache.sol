@@ -245,7 +245,7 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
                 twapPeriod,
                 0 // now
             );
-
+            // TODO: we can bundle all the queries and make one call to the oracle instead of separately
             uint256 lNewPrice = oracle.getTimeWeightedAverage(lQueries)[0];
 
             // determine if price has moved beyond the threshold, and pay out reward if so
