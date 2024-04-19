@@ -85,8 +85,9 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), Reent
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
-            // TODO: factor in potential inversion
-            rResults[i] = lPair.getPastAccumulator(query.variable, lIndex, query.ago);
+            int256 lAcc = lPair.getPastAccumulator(query.variable, lIndex, query.ago);
+            // safety: negation will not overflow as the accumulator's type is int88
+            rResults[i] = lToken0 == query.base ? lAcc : -lAcc;
         }
     }
 
