@@ -35,7 +35,7 @@ contract ReservoirPriceCacheTest is BaseTest {
         _priceCache.setRoute(address(_tokenA), address(_tokenB), lRoute);
     }
 
-    function testIsPriceUpdateIncentivized(uint256 aBountyAmount) external {
+    function testGasBountyAvailable(uint256 aBountyAmount) external {
         // assume
         uint256 lBounty = bound(aBountyAmount, 1, type(uint256).max);
 
@@ -43,18 +43,8 @@ contract ReservoirPriceCacheTest is BaseTest {
         deal(address(_priceCache), lBounty);
 
         // act & assert
-        assertTrue(_priceCache.isPriceUpdateIncentivized());
+        assertEq(_priceCache.gasBountyAvailable(), lBounty);
     }
-
-    function testIsPriceUpdateIncentivized_Zero() external {
-        // sanity
-        assertEq(address(_priceCache).balance, 0);
-
-        // act & assert
-        assertFalse(_priceCache.isPriceUpdateIncentivized());
-    }
-
-    function testGasBountyAvailable() external { }
 
     function testGasBountyAvailable_Zero() external {
         // sanity

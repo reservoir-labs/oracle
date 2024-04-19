@@ -209,10 +209,6 @@ contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle
 
     // price update related functions
 
-    function isPriceUpdateIncentivized() external view returns (bool) {
-        return address(this).balance > 0;
-    }
-
     function gasBountyAvailable() external view returns (uint256) {
         return address(this).balance;
     }
