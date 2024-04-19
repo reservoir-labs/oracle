@@ -18,8 +18,7 @@ import { Utils } from "src/libraries/Utils.sol";
 
 contract ReservoirPriceCache is Owned(msg.sender), ReentrancyGuard, IPriceOracle {
     using FixedPointMathLib for uint256;
-    using Utils for address;
-    using Utils for uint256;
+    using Utils for *;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       CONSTANTS                                           //

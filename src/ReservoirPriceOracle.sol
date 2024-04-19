@@ -16,7 +16,7 @@ import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGu
 
 contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using QueryProcessor for ReservoirPair;
-    using Utils for address;
+    using Utils for *;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       EVENTS                                              //
