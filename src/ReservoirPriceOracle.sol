@@ -52,8 +52,8 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), Reent
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
-            // TODO: factor in potential inversion
-            rResults[i] = lPair.getTimeWeightedAverage(lQuery.variable, lQuery.secs, lQuery.ago, lIndex);
+            uint256 lResult = lPair.getTimeWeightedAverage(lQuery.variable, lQuery.secs, lQuery.ago, lIndex);
+            rResults[i] = lToken0 == lQuery.base ? lResult : lResult.invertWad();
         }
     }
 

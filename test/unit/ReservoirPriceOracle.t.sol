@@ -3,13 +3,50 @@ pragma solidity ^0.8.0;
 
 import { BaseTest, console2, ReservoirPair } from "test/__fixtures/BaseTest.t.sol";
 
-import { Buffer, Variable, OracleLatestQuery, OracleAccumulatorQuery } from "src/ReservoirPriceOracle.sol";
+import {
+    Buffer,
+    Variable,
+    OracleLatestQuery,
+    OracleAccumulatorQuery,
+    OracleAverageQuery
+} from "src/ReservoirPriceOracle.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     event Route(address token0, address token1, ReservoirPair pair);
 
-    function testGetTimeWeightedAverage() external { }
-    function testGetTimeWeightedAverage_Inverted() external { }
+    function testGetTimeWeightedAverage() external {
+        // arrange
+        skip(60);
+        _pair.sync();
+        skip(60);
+        _pair.sync();
+        _oracle.setPairForRoute(address(_tokenA), address(_tokenB), _pair);
+        OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
+        lQueries[0] = OracleAverageQuery(Variable.RAW_PRICE, address(_tokenA), address(_tokenB), 10, 0);
+
+        // act
+        uint256[] memory lResults = _oracle.getTimeWeightedAverage(lQueries);
+
+        // assert
+        assertEq(lResults[0], 98_918_868_099_219_913_512);
+    }
+
+    function testGetTimeWeightedAverage_Inverted() external {
+        // arrange
+        skip(60);
+        _pair.sync();
+        skip(60);
+        _pair.sync();
+        _oracle.setPairForRoute(address(_tokenB), address(_tokenA), _pair);
+        OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
+        lQueries[0] = OracleAverageQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 10, 0);
+
+        // act
+        uint256[] memory lResults = _oracle.getTimeWeightedAverage(lQueries);
+
+        // assert
+        assertEq(lResults[0], 0.010109294811147218e18);
+    }
 
     function testGetLatest(uint32 aFastForward) public {
         // assume - latest price should always be the same no matter how much time has elapsed
