@@ -28,7 +28,7 @@ contract ReservoirPriceOracle is IReservoirPriceOracle, Owned(msg.sender), Reent
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    mapping(address token0 => mapping(address token1 => ReservoirPair pair)) internal pairs;
+    mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                   PUBLIC FUNCTIONS                                        //

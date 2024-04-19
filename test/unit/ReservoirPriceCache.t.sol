@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import { BaseTest, console2 } from "test/__fixtures/BaseTest.t.sol";
+import { BaseTest, console2, ReservoirPair } from "test/__fixtures/BaseTest.t.sol";
 import { ReservoirPriceCache, IPriceOracle } from "src/ReservoirPriceCache.sol";
 
 import { Utils } from "src/libraries/Utils.sol";
@@ -324,12 +324,45 @@ contract ReservoirPriceCacheTest is BaseTest {
         lRoute[3] = lEnd;
         _priceCache.setRoute(lStart, lEnd, lRoute);
 
+        ReservoirPair lAC = ReservoirPair(_createPair(address(_tokenA), address(_tokenC), 0));
+        ReservoirPair lCD = ReservoirPair(_createPair(address(_tokenC), address(_tokenD), 0));
+        ReservoirPair lBD = ReservoirPair(_createPair(address(_tokenB), address(_tokenD), 0));
+
+        _tokenA.mint(address(lAC), 200 * 10 ** _tokenA.decimals());
+        _tokenC.mint(address(lAC), 100 * 10 ** _tokenC.decimals());
+        lAC.mint(address(this));
+
+        _tokenC.mint(address(lCD), 100 * 10 ** _tokenC.decimals());
+        _tokenD.mint(address(lCD), 200 * 10 ** _tokenD.decimals());
+        lCD.mint(address(this));
+
+        _tokenB.mint(address(lBD), 100 * 10 ** _tokenB.decimals());
+        _tokenD.mint(address(lBD), 200 * 10 ** _tokenD.decimals());
+        lBD.mint(address(this));
+
+        _oracle.setPairForRoute(lStart, lIntermediate1, lAC);
+        _oracle.setPairForRoute(lIntermediate2, lIntermediate1, lCD);
+        _oracle.setPairForRoute(lIntermediate2, lEnd, lBD);
+
+        skip(1);
+        _pair.sync();
+        lAC.sync();
+        lCD.sync();
+        lBD.sync();
+        skip(_priceCache.twapPeriod() * 2);
+
         // act
         _priceCache.updatePrice(address(_tokenA), address(_tokenB), address(this));
 
         // assert
-        uint256 lPrice = _priceCache.priceCache(lStart, lEnd);
-        //        assertEq();
+        uint256 lPriceAC = _priceCache.priceCache(lStart, lIntermediate1);
+        uint256 lPriceCD = _priceCache.priceCache(lIntermediate1, lIntermediate2);
+        uint256 lPriceBD = _priceCache.priceCache(lEnd, lIntermediate2);
+        uint256 lPriceAB = _priceCache.priceCache(lStart, lEnd);
+        assertApproxEqRel(lPriceAC, 0.5e18, 0.0001e18);
+        assertApproxEqRel(lPriceCD, 2e18, 0.0001e18);
+        assertApproxEqRel(lPriceBD, 2e18, 0.0001e18);
+        assertEq(lPriceAB, 0); // composite price is not stored in the cache
     }
 
     function testSetRoute() public {
