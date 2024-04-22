@@ -265,7 +265,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testUpdatePrice_BeyondThreshold(uint256 aRewardAvailable) external {
         // assume
         uint256 lRewardAvailable =
-                        bound(aRewardAvailable, block.basefee * _oracle.rewardMultiplier(), type(uint256).max);
+            bound(aRewardAvailable, block.basefee * _oracle.rewardMultiplier(), type(uint256).max);
 
         // arrange
         _writePriceCache(address(_tokenA), address(_tokenB), 5e18);

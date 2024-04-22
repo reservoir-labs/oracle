@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import { IERC20 } from "forge-std/interfaces/IERC20.sol";
 
-import { NoPairForRoute } from "src/Errors.sol";
+import { NoDesignatedPair } from "src/Errors.sol";
 import {
     IReservoirPriceOracle,
     OracleAverageQuery,
@@ -175,10 +175,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         uint256[] memory lNewPrices = getTimeWeightedAverage(lQueries);
 
-        for (uint i = 0; i < lNewPrices.length; ++i) {
+        for (uint256 i = 0; i < lNewPrices.length; ++i) {
             address lBase = lQueries[i].base;
             address lQuote = lQueries[i].quote;
-            uint lNewPrice = lNewPrices[i];
+            uint256 lNewPrice = lNewPrices[i];
 
             // determine if price has moved beyond the threshold, and pay out reward if so
             if (_calcPercentageDiff(priceCache[lBase][lQuote], lNewPrice) >= priceDeviationThreshold) {
@@ -263,7 +263,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     function _validatePair(ReservoirPair aPair) internal pure {
-        if (address(aPair) == address(0)) revert NoPairForRoute();
+        if (address(aPair) == address(0)) revert NoDesignatedPair();
     }
 
     // TODO: replace this with safe, audited lib function

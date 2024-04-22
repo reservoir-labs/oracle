@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 // oracle related errors
-error NoPairForRoute();
+error NoDesignatedPair();
 error BadVariableRequest();
 error OracleNotInitialized();
 error InvalidSeconds();
