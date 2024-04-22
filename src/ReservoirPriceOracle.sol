@@ -159,27 +159,35 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         address[] memory lRoute = _route[lToken0][lToken1];
         if (lRoute.length == 0) revert PO_NoPath();
 
+        OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](lRoute.length - 1);
+
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
             (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
-            OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
-            lQueries[0] = OracleAverageQuery(
+            lQueries[i] = OracleAverageQuery(
                 Variable.RAW_PRICE,
                 lToken0,
                 lToken1,
                 twapPeriod,
                 0 // now
             );
-            // TODO: we can bundle all the queries and make one call instead of separately
-            uint256 lNewPrice = getTimeWeightedAverage(lQueries)[0];
+        }
+
+        uint256[] memory lNewPrices = getTimeWeightedAverage(lQueries);
+
+        for (uint i = 0; i < lNewPrices.length; ++i) {
+            address lBase = lQueries[i].base;
+            address lQuote = lQueries[i].quote;
+            uint lNewPrice = lNewPrices[i];
 
             // determine if price has moved beyond the threshold, and pay out reward if so
-            if (_calcPercentageDiff(priceCache[lToken0][lToken1], lNewPrice) >= priceDeviationThreshold) {
+            if (_calcPercentageDiff(priceCache[lBase][lQuote], lNewPrice) >= priceDeviationThreshold) {
                 _rewardUpdater(aRewardRecipient);
             }
 
-            priceCache[lToken0][lToken1] = lNewPrice;
-            emit Price(lToken0, lToken1, lNewPrice);
+            priceCache[lBase][lQuote] = lNewPrice;
+            // TODO: worth the gas cost? who will consume it off chain?
+            emit Price(lBase, lQuote, lNewPrice);
         }
     }
 
@@ -287,21 +295,16 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         address[] memory lRoute = _route[lToken0][lToken1];
         if (lRoute.length == 0) revert PO_NoPath();
 
-        uint256 lPrice;
-        if (lRoute.length == 2) {
-            lPrice = priceCache[lToken0][lToken1];
-        } else if (lRoute.length > 2) {
-            lPrice = WAD;
-            for (uint256 i = 0; i < lRoute.length - 1; ++i) {
-                // we need to sort token addresses again since intermediate path addresses are not guaranteed to be sorted
-                (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
+        uint256 lPrice = WAD;
+        for (uint256 i = 0; i < lRoute.length - 1; ++i) {
+            // we need to sort token addresses again since intermediate path addresses are not guaranteed to be sorted
+            (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
 
-                // it is assumed that subroutes defined here are simple routes and not composite routes
-                // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
-                // therefore we do not check `_route` again to ensure that there is indeed a route
-                uint256 lRoutePrice = priceCache[lLowerToken][lHigherToken];
-                lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
-            }
+            // it is assumed that subroutes defined here are simple routes and not composite routes
+            // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
+            // therefore we do not check `_route` again to ensure that there is indeed a route
+            uint256 lRoutePrice = priceCache[lLowerToken][lHigherToken];
+            lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
         }
 
         // idea: can build a cache of decimals to save on making external calls?
