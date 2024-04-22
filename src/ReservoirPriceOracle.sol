@@ -53,7 +53,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     error RPC_TOKENS_UNSORTED();
     error RPC_INVALID_ROUTE_LENGTH();
     error RPC_INVALID_ROUTE();
-    error RPC_UPDATE_PRICE_NOT_SIMPLE_ROUTE();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
