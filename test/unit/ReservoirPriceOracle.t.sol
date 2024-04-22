@@ -19,7 +19,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event Oracle(address newOracle);
-    event RewardMultiplier(uint256 newMultiplier);
+    event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
 
     // writes the cached prices, for easy testing
@@ -207,17 +207,17 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(_oracle.twapPeriod(), lNewPeriod);
     }
 
-    function testUpdateRewardMultiplier() external {
+    function testUpdateRewardGasAmount() external {
         // arrange
         uint64 lNewRewardMultiplier = 50;
 
         // act
         vm.expectEmit(false, false, false, false);
-        emit RewardMultiplier(lNewRewardMultiplier);
-        _oracle.updateRewardMultiplier(lNewRewardMultiplier);
+        emit RewardGasAmount(lNewRewardMultiplier);
+        _oracle.updateRewardGasAmount(lNewRewardMultiplier);
 
         // assert
-        assertEq(_oracle.rewardMultiplier(), lNewRewardMultiplier);
+        assertEq(_oracle.rewardGasAmount(), lNewRewardMultiplier);
     }
 
     function testUpdatePrice_FirstUpdate() external {
@@ -264,8 +264,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testUpdatePrice_BeyondThreshold(uint256 aRewardAvailable) external {
         // assume
-        uint256 lRewardAvailable =
-            bound(aRewardAvailable, block.basefee * _oracle.rewardMultiplier(), type(uint256).max);
+        uint256 lRewardAvailable = bound(aRewardAvailable, block.basefee * _oracle.rewardGasAmount(), type(uint256).max);
 
         // arrange
         _writePriceCache(address(_tokenA), address(_tokenB), 5e18);
@@ -283,12 +282,12 @@ contract ReservoirPriceOracleTest is BaseTest {
         // assert
         assertEq(_oracle.priceCache(address(_tokenA), address(_tokenB)), 98_918_868_099_219_913_512);
         assertEq(_oracle.priceCache(address(_tokenB), address(_tokenA)), 0);
-        assertEq(address(this).balance, block.basefee * _oracle.rewardMultiplier());
+        assertEq(address(this).balance, block.basefee * _oracle.rewardGasAmount());
     }
 
     function testUpdatePrice_BeyondThreshold_InsufficientReward(uint256 aRewardAvailable) external {
         // assume
-        uint256 lRewardAvailable = bound(aRewardAvailable, 1, block.basefee * _oracle.rewardMultiplier() - 1);
+        uint256 lRewardAvailable = bound(aRewardAvailable, 1, block.basefee * _oracle.rewardGasAmount() - 1);
 
         // arrange
         deal(address(_oracle), lRewardAvailable);
@@ -744,11 +743,11 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.setRoute(lToken0, lToken1, lInvalidRoute2);
     }
 
-    function testUpdateRewardMultiplier_NotOwner() external {
+    function testUpdateRewardGasAmount_NotOwner() external {
         // act & assert
         vm.prank(address(123));
         vm.expectRevert("UNAUTHORIZED");
-        _oracle.updateRewardMultiplier(111);
+        _oracle.updateRewardGasAmount(111);
     }
 
     function testGetQuote_NoPath() external {

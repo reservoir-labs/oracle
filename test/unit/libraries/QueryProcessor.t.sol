@@ -86,8 +86,8 @@ contract QueryProcessorTest is BaseTest {
 
         // assert
         // as it is hard to calc the exact average price given so many fuzz parameters, we just assert that the price should be within a range
-        uint lStartingPrice = 98.9223e18;
-        uint lEndingPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, lLatestIndex, false);
+        uint256 lStartingPrice = 98.9223e18;
+        uint256 lEndingPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, lLatestIndex, false);
         assertLt(lAveragePrice, lStartingPrice);
         assertGt(lAveragePrice, lEndingPrice);
     }

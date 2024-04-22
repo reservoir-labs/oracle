@@ -38,7 +38,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event PriceDeviationThreshold(uint256 newThreshold);
-    event RewardMultiplier(uint256 newMultiplier);
+    event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
     event Price(address token0, address token1, uint256 price);
     event TwapPeriod(uint256 newPeriod);
@@ -58,13 +58,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    /// @notice percentage change greater than which, a price update with the oracles would succeed
+    /// @notice percentage change greater than which, a price update may result in a reward payout of native tokens,
+    /// subject to availability of rewards.
     /// 1e18 == 100%
     uint64 public priceDeviationThreshold;
 
     /// @notice multiples of the base fee the contract rewards the caller for updating the price when it goes
     /// beyond the `priceDeviationThreshold`
-    uint64 public rewardMultiplier;
+    uint64 public rewardGasAmount;
 
     /// @notice TWAP period for querying the oracle in seconds
     uint64 public twapPeriod;
@@ -88,7 +89,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     constructor(uint64 aThreshold, uint64 aTwapPeriod, uint64 aMultiplier) {
         updatePriceDeviationThreshold(aThreshold);
         updateTwapPeriod(aTwapPeriod);
-        updateRewardMultiplier(aMultiplier);
+        updateRewardGasAmount(aMultiplier);
     }
 
     /// @dev contract will hold native tokens to be distributed as gas bounty for updating the prices
@@ -99,11 +100,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     //                                       MODIFIERS                                           //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    modifier validateTokens(address aTokenA, address aTokenB) {
-        if (aTokenA == aTokenB) revert RPC_SAME_TOKEN();
-        _;
-    }
-
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                   PUBLIC FUNCTIONS                                        //
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,12 +107,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     // IPriceOracle
 
     /// @inheritdoc IPriceOracle
-    function getQuote(uint256 aAmount, address aBase, address aQuote)
-        external
-        view
-        validateTokens(aBase, aQuote)
-        returns (uint256 rOut)
-    {
+    function getQuote(uint256 aAmount, address aBase, address aQuote) external view returns (uint256 rOut) {
         rOut = _getQuote(aAmount, aBase, aQuote);
     }
 
@@ -124,7 +115,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function getQuotes(uint256 aAmount, address aBase, address aQuote)
         external
         view
-        validateTokens(aBase, aQuote)
         returns (uint256 rBidOut, uint256 rAskOut)
     {
         uint256 lResult = _getQuote(aAmount, aBase, aQuote);
@@ -148,11 +138,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @param aTokenA Address of one of the tokens for the price update. Does not have to be less than address of aTokenB
     /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
     /// @param aRewardRecipient The beneficiary of the reward. Must implement the receive function if is a smart contract address
-    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient)
-        external
-        validateTokens(aTokenA, aTokenB)
-        nonReentrant
-    {
+    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
         address[] memory lRoute = _route[lToken0][lToken1];
@@ -185,8 +171,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             }
 
             priceCache[lBase][lQuote] = lNewPrice;
-            // TODO: worth the gas cost? who will consume it off chain?
-            emit Price(lBase, lQuote, lNewPrice);
         }
     }
 
@@ -281,7 +265,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()` on ARB because the latter will always return
         // the demand insensitive base fee, while the former can return real higher fees during times of congestion
         // safety: this mul will not overflow even in extreme cases of `block.basefee`
-        uint256 lPayoutAmt = block.basefee * rewardMultiplier;
+        uint256 lPayoutAmt = block.basefee * rewardGasAmount;
 
         if (lPayoutAmt <= address(this).balance) {
             payable(lRecipient).transfer(lPayoutAmt);
@@ -336,9 +320,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         emit TwapPeriod(aNewPeriod);
     }
 
-    function updateRewardMultiplier(uint64 aNewMultiplier) public onlyOwner {
-        rewardMultiplier = aNewMultiplier;
-        emit RewardMultiplier(aNewMultiplier);
+    function updateRewardGasAmount(uint64 aNewMultiplier) public onlyOwner {
+        rewardGasAmount = aNewMultiplier;
+        emit RewardGasAmount(aNewMultiplier);
     }
 
     // sets a specific pair to serve as price feed for a certain route
