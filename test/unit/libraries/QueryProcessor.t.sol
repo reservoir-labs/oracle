@@ -69,7 +69,7 @@ contract QueryProcessorTest is BaseTest {
         // ensure that the query window is within what is still available in the buffer
         // the fact that we potentially go around the buffer more than one means that maybe the query window's
         // samples have been overwritten. Thus the need for the modulus.
-        vm.assume(lSecs + lAgo <= (lBlockTime * lObservationsToWrite) % (lBlockTime * Buffer.SIZE));
+        vm.assume(lSecs + lAgo <= (lBlockTime * (lObservationsToWrite - 1)) % (lBlockTime * Buffer.SIZE));
 
         // arrange - perform some swaps
         uint256 lSwapAmt = 1e6;
@@ -85,8 +85,11 @@ contract QueryProcessorTest is BaseTest {
             _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, lSecs, lAgo, lLatestIndex);
 
         // assert
-        // TODO: figure out how to verify the TWAP independently
-        assertEq(lAveragePrice, 5);
+        // as it is hard to calc the exact average price given so many fuzz parameters, we just assert that the price should be within a range
+        uint lStartingPrice = 98.9223e18;
+        uint lEndingPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, lLatestIndex, false);
+        assertLt(lAveragePrice, lStartingPrice);
+        assertGt(lAveragePrice, lEndingPrice);
     }
 
     function testGetPastAccumulator_ExactMatch(
