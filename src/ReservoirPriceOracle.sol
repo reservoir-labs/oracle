@@ -106,6 +106,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     // IPriceOracle
 
+    function name() external view returns (string memory) {
+        return "RESERVOIR PRICE ORACLE";
+    }
+
     /// @inheritdoc IPriceOracle
     function getQuote(uint256 aAmount, address aBase, address aQuote) external view returns (uint256 rOut) {
         rOut = _getQuote(aAmount, aBase, aQuote);

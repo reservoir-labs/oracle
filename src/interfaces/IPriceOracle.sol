@@ -2,6 +2,8 @@
 pragma solidity ^0.8.0;
 
 interface IPriceOracle {
+    function name() external view returns (string memory);
+
     /// @notice Returns the quote for a given amount of base asset in quote asset.
     /// @param amount The amount of base asset.
     /// @param base The address of the base asset.
