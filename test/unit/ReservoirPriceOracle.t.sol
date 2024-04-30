@@ -425,14 +425,14 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // act
         vm.expectEmit(false, false, false, true);
-        emit Route(lStart, lEnd, lRoute);
-        vm.expectEmit(false, false, false, true);
         emit Route(lStart, lIntermediate1, lIntermediateRoute1);
         vm.expectEmit(true, true, true, true);
         // note the reverse seq here as well
         emit Route(lIntermediate2, lIntermediate1, lIntermediateRoute2);
         vm.expectEmit(false, false, false, true);
         emit Route(lIntermediate2, lEnd, lIntermediateRoute3);
+        vm.expectEmit(false, false, false, true);
+        emit Route(lStart, lEnd, lRoute);
         _oracle.setRoute(lStart, lEnd, lRoute);
 
         // assert
