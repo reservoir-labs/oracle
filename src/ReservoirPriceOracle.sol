@@ -249,6 +249,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     //                                 INTERNAL FUNCTIONS                                        //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
+    function _calculateSlot(address aToken0, address aToken1) internal view returns (bytes32) {
+        return keccak256(abi.encode(aToken0, aToken1));
+    }
+
     function _validatePair(ReservoirPair aPair) internal pure {
         if (address(aPair) == address(0)) revert NoDesignatedPair();
     }
@@ -359,8 +363,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aRoute.length > MAX_ROUTE_LENGTH || aRoute.length < 2) revert RPC_INVALID_ROUTE_LENGTH();
         if (aRoute[0] != aToken0 || aRoute[aRoute.length - 1] != aToken1) revert RPC_INVALID_ROUTE();
 
-        bytes memory lConcatenated = abi.encode(aToken0, aToken1);
-        bytes32 lSlot = keccak256(lConcatenated);
+        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
 
         // simple route
         // gas: can store aRoute.length as a local variable
@@ -387,7 +390,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 }
 
                 (address lLowerToken, address lHigherToken) = aRoute[i - 1].sortTokens(aRoute[i]);
-                bytes32 lIntermediateRoutelSlot = keccak256(abi.encode(lLowerToken, lHigherToken));
+                bytes32 lIntermediateRoutelSlot = _calculateSlot(lLowerToken, lHigherToken);
                 bytes32 lRead;
                 assembly {
                     lRead := sload(lIntermediateRoutelSlot)
@@ -406,7 +409,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 let data := shl(248, 0x03) // 0x03 in the uppermost byte
                 lLastToken := shl(88, lLastToken)
                 data := or(data, lLastToken)
-                sstore(lSlot, data)
+                sstore(add(lSlot, lIndex), data)
             }
         }
         emit Route(aToken0, aToken1, aRoute);
@@ -416,9 +419,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
 
-        bytes32 lSlot = keccak256(abi.encode(aToken0, aToken1));
+        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
 
-        // TODO: we should clear subsequent words as well, i.e. everything that it has written before
+        // TODO: we should clear subsequent words as well, i.e. everything this route has touched
         assembly {
             sstore(lSlot, 0)
         }
