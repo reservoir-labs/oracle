@@ -17,6 +17,8 @@ import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
+import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
+
 import { console2 } from "forge-std/console2.sol";
 bytes32 constant FLAG_SIMPLE_PRICE = bytes32(uint256(0x01));
 bytes32 constant FLAG_COMPOSITE_NEXT = bytes32(uint256(0x02));
@@ -24,6 +26,7 @@ bytes32 constant FLAG_COMPOSITE_END = bytes32(uint256(0x03));
 
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using FixedPointMathLib for uint256;
+    using Bytes32Lib for bytes32;
     using QueryProcessor for ReservoirPair;
     using Utils for *;
 
@@ -57,6 +60,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     error RPC_TOKENS_UNSORTED();
     error RPC_INVALID_ROUTE_LENGTH();
     error RPC_INVALID_ROUTE();
+    error RPC_WRITE_TO_NON_SIMPLE_ROUTE();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
@@ -76,12 +80,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
-
-    /// @notice The latest cached geometric TWAP of token1/token0, where the address of token0 is strictly less than the address of token1
-    /// Stored in the form of a 18 decimal fixed point number.
-    /// Supported price range: 1wei to 1e36, due to the need to support inverting price via `Utils.invertWad`
-    /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
-    mapping(address token0 => mapping(address token1 => uint256 price)) public priceCache;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                CONSTRUCTOR, FALLBACKS                                     //
@@ -136,6 +134,15 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         return _route(aToken0, aToken1);
     }
 
+    /// @notice The latest cached geometric TWAP of token1/token0, where the address of token0 is strictly less than the address of token1
+    /// Stored in the form of a 18 decimal fixed point number.
+    /// Supported price range: 1wei to 1e36, due to the need to support inverting price via `Utils.invertWad`
+    /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
+    /// Only stores prices of simple routes. Does not store prices of composite routes.
+    function priceCache(address aToken0, address aToken1) external view returns (uint256) {
+        return _priceCache(aToken0, aToken1);
+    }
+
     /// @notice Updates the TWAP price for all simple routes between `aTokenA` and `aTokenB`. Will also update intermediate routes if the route defined between
     /// aTokenA and aTokenB is longer than 1 hop
     /// However, if the route between aTokenA and aTokenB is composite route (more than 1 hop), no cache entry is written
@@ -171,11 +178,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             uint256 lNewPrice = lNewPrices[i];
 
             // determine if price has moved beyond the threshold, and pay out reward if so
-            if (_calcPercentageDiff(priceCache[lBase][lQuote], lNewPrice) >= priceDeviationThreshold) {
+            if (_calcPercentageDiff(_priceCache(lBase, lQuote), lNewPrice) >= priceDeviationThreshold) {
                 _rewardUpdater(aRewardRecipient);
             }
 
-            priceCache[lBase][lQuote] = lNewPrice;
+            _writePriceCache(lBase, lQuote, lNewPrice);
         }
     }
 
@@ -327,6 +334,33 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
+    function _priceCache(address aToken0, address aToken1) internal view returns (uint256) {
+        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
+
+        bytes32 lData;
+        assembly  {
+            lData := sload(lSlot)
+        }
+        if (lData >> 248 == FLAG_SIMPLE_PRICE) {
+            return (lData & 0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff).toUint256();
+        }
+    }
+
+    function _writePriceCache(address aToken0, address aToken1, uint256 lNewPrice) internal {
+        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
+
+        bytes32 lData;
+        assembly {
+            lData := sload(lSlot)
+        }
+        if (lData >> 248 != FLAG_SIMPLE_PRICE) revert RPC_WRITE_TO_NON_SIMPLE_ROUTE();
+
+        lData = FLAG_SIMPLE_PRICE & bytes32(lNewPrice);
+        assembly {
+            sstore(lSlot, lData)
+        }
+    }
+
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
@@ -341,7 +375,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             // it is assumed that subroutes defined here are simple routes and not composite routes
             // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
             // therefore we do not check `_route` again to ensure that there is indeed a route
-            uint256 lRoutePrice = priceCache[lLowerToken][lHigherToken];
+            uint256 lRoutePrice = _priceCache(lLowerToken, lHigherToken);
             lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
         }
 
