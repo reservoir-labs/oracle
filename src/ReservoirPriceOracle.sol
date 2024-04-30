@@ -353,40 +353,74 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     // should we make this recursive, meaning for a route A-B-C-D
     // besides defining A-D, A-B, B-C, and C-D, we also define
     // A-B-C, B-C-D ?
-    function setRoute(address aToken0, address aToken1, address[] calldata aRoute) external onlyOwner {
+    function setRoute(address aToken0, address aToken1, address[] memory aRoute) public onlyOwner {
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
         if (aRoute.length > MAX_ROUTE_LENGTH || aRoute.length < 2) revert RPC_INVALID_ROUTE_LENGTH();
         if (aRoute[0] != aToken0 || aRoute[aRoute.length - 1] != aToken1) revert RPC_INVALID_ROUTE();
 
-        _route[aToken0][aToken1] = aRoute;
-        emit Route(aToken0, aToken1, aRoute);
+        bytes memory lConcatenated = abi.encode(aToken0, aToken1);
+        bytes32 lSlot = keccak256(lConcatenated);
 
-        // iteratively define those subroutes if undefined
-        if (aRoute.length > 2) {
-            for (uint256 i = 0; i < aRoute.length - 1; ++i) {
-                (address lLowerToken, address lHigherToken) = aRoute[i].sortTokens(aRoute[i + 1]);
+        // simple route
+        // gas: can store aRoute.length as a local variable
+        if (aRoute.length == 2) {
+            assembly {
+                let data := shl(248, 0x01) // 0x01 in the uppermost byte
+                sstore(lSlot, data)
+            }
+            // update price for simple routes
+        }
+        // composite route
+        else {
+            uint256 lIndex = 0;
 
-                // if route is undefined
-                address[] memory lExisting = _route[lLowerToken][lHigherToken];
-                if (lExisting.length == 0) {
-                    address[] memory lSubroute = new address[](2);
-                    lSubroute[0] = lLowerToken;
-                    lSubroute[1] = lHigherToken;
+            // first + intermediate hops
+            for (uint256 i = 1; i < aRoute.length - 1; ++i) {
+                address lNextToken = aRoute[i];
+                assembly {
+                    let data := shl(248, 0x02) // 0x02 in the uppermost byte
+                    lNextToken := shl(88, lNextToken)
+                    data := or(data, lNextToken)
+                    sstore(add(lSlot, lIndex), data) // need to do funny things with index?
+                    lIndex := add(lIndex, 1)
+                }
 
-                    _route[lLowerToken][lHigherToken] = lSubroute;
-                    emit Route(lLowerToken, lHigherToken, lSubroute);
+                (address lLowerToken, address lHigherToken) = aRoute[i - 1].sortTokens(aRoute[i]);
+                bytes32 lIntermediateRoutelSlot = keccak256(abi.encode(lLowerToken, lHigherToken));
+                bytes32 lRead;
+                assembly {
+                    lRead := sload(lIntermediateRoutelSlot)
+                }
+                if (lRead == bytes32(0)) {
+                    address[] memory lIntermediateRoute;
+                    lIntermediateRoute[0] = lLowerToken;
+                    lIntermediateRoute[1] = lHigherToken;
+                    setRoute(lLowerToken, lHigherToken, lIntermediateRoute);
                 }
             }
+
+            // last hop
+            address lLastToken = aRoute[aRoute.length - 1];
+            assembly {
+                let data := shl(248, 0x03) // 0x03 in the uppermost byte
+                lLastToken := shl(88, lLastToken)
+                data := or(data, lLastToken)
+                sstore(lSlot, data)
+            }
         }
-        // should we update prices right after setting the route?
+        emit Route(aToken0, aToken1, aRoute);
     }
 
     function clearRoute(address aToken0, address aToken1) external onlyOwner {
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
 
-        delete _route[aToken0][aToken1];
-        emit Route(aToken0, aToken1, new address[](0));
+        bytes32 lSlot = keccak256(abi.encode(aToken0, aToken1));
+
+        // TODO: we should clear subsequent words as well, i.e. everything that it has written before
+        assembly {
+            sstore(lSlot, 0)
+        }
     }
 }
