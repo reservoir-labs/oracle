@@ -425,5 +425,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         assembly {
             sstore(lSlot, 0)
         }
+        emit Route(aToken0, aToken1, new address[](0));
     }
 }
