@@ -17,6 +17,10 @@ import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
+import { console2 } from "forge-std/console2.sol";
+bytes32 constant FLAG_SIMPLE_PRICE = bytes32(uint256(0x01));
+bytes32 constant FLAG_COMPOSITE_NEXT = bytes32(uint256(0x02));
+bytes32 constant FLAG_COMPOSITE_END = bytes32(uint256(0x03));
 
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using FixedPointMathLib for uint256;
@@ -131,8 +135,48 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         return address(this).balance;
     }
 
-    function route(address aToken0, address aToken1) external view returns (address[] memory) {
-        return _route[aToken0][aToken1];
+    function route(address aToken0, address aToken1) external view returns (address[] memory rRoute) {
+        address[] memory lResults = new address[](MAX_ROUTE_LENGTH);
+        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
+
+        bytes32 lData;
+        uint256 lRouteLength;
+        assembly {
+            lData := sload(lSlot)
+        }
+        bytes32 lFlag = lData >> 248; // we read the first byte of the word
+
+        // simple route
+        if (lFlag == FLAG_SIMPLE_PRICE) {
+            lResults[0] = aToken0;
+            lResults[1] = aToken1;
+            lRouteLength = 2;
+        }
+        // composite route
+        else if (lFlag == FLAG_COMPOSITE_NEXT) {
+            address lToken =  address(uint160(uint256(lData >> 88)));
+            lResults[0] = aToken0;
+            lResults[1] = lToken;
+            lRouteLength = 2;
+            while(true) {
+                assembly {
+                    lData := sload(add(lSlot, sub(lRouteLength, 1)))
+                }
+                lToken =  address(uint160(uint256(lData >> 88)));
+                lResults[lRouteLength] = lToken;
+                lRouteLength += 1;
+
+                lFlag = lData >> 248;
+                if (lFlag == FLAG_COMPOSITE_END) break;
+                else { assert(lFlag == FLAG_COMPOSITE_NEXT); }
+            }
+        }
+        // no route
+        else {}
+        rRoute = new address[](lRouteLength);
+        for (uint i = 0; i < lRouteLength; ++i) {
+            rRoute[i] = lResults[i];
+        }
     }
 
     /// @notice Updates the TWAP price for all simple routes between `aTokenA` and `aTokenB`. Will also update intermediate routes if the route defined between
@@ -249,6 +293,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     //                                 INTERNAL FUNCTIONS                                        //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
+    /// @dev aToken0 has to be strictly less than aToken1
     function _calculateSlot(address aToken0, address aToken1) internal view returns (bytes32) {
         return keccak256(abi.encode(aToken0, aToken1));
     }
