@@ -83,9 +83,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
     mapping(address token0 => mapping(address token1 => uint256 price)) public priceCache;
 
-    /// @notice Defines the route to determine price of token0, where the address of token0 is strictly less than the address of token1
-    mapping(address token0 => mapping(address token1 => address[] path)) private _route;
-
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                CONSTRUCTOR, FALLBACKS                                     //
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,48 +132,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         return address(this).balance;
     }
 
-    function route(address aToken0, address aToken1) external view returns (address[] memory rRoute) {
-        address[] memory lResults = new address[](MAX_ROUTE_LENGTH);
-        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
-
-        bytes32 lData;
-        uint256 lRouteLength;
-        assembly {
-            lData := sload(lSlot)
-        }
-        bytes32 lFlag = lData >> 248; // we read the first byte of the word
-
-        // simple route
-        if (lFlag == FLAG_SIMPLE_PRICE) {
-            lResults[0] = aToken0;
-            lResults[1] = aToken1;
-            lRouteLength = 2;
-        }
-        // composite route
-        else if (lFlag == FLAG_COMPOSITE_NEXT) {
-            address lToken =  address(uint160(uint256(lData >> 88)));
-            lResults[0] = aToken0;
-            lResults[1] = lToken;
-            lRouteLength = 2;
-            while(true) {
-                assembly {
-                    lData := sload(add(lSlot, sub(lRouteLength, 1)))
-                }
-                lToken =  address(uint160(uint256(lData >> 88)));
-                lResults[lRouteLength] = lToken;
-                lRouteLength += 1;
-
-                lFlag = lData >> 248;
-                if (lFlag == FLAG_COMPOSITE_END) break;
-                else { assert(lFlag == FLAG_COMPOSITE_NEXT); }
-            }
-        }
-        // no route
-        else {}
-        rRoute = new address[](lRouteLength);
-        for (uint i = 0; i < lRouteLength; ++i) {
-            rRoute[i] = lResults[i];
-        }
+    function route(address aToken0, address aToken1) external view returns (address[] memory) {
+        return _route(aToken0, aToken1);
     }
 
     /// @notice Updates the TWAP price for all simple routes between `aTokenA` and `aTokenB`. Will also update intermediate routes if the route defined between
@@ -189,7 +146,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
-        address[] memory lRoute = _route[lToken0][lToken1];
+        address[] memory lRoute = _route(lToken0, lToken1);
         if (lRoute.length == 0) revert PO_NoPath();
 
         OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](lRoute.length - 1);
@@ -325,10 +282,55 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         } else { } // do nothing if lPayoutAmt is greater than the balance
     }
 
+    function _route(address aToken0, address aToken1) internal view returns (address[] memory rRoute) {
+        address[] memory lResults = new address[](MAX_ROUTE_LENGTH);
+        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
+
+        bytes32 lData;
+        uint256 lRouteLength;
+        assembly {
+            lData := sload(lSlot)
+        }
+        bytes32 lFlag = lData >> 248; // we read the first byte of the word
+
+        // simple route
+        if (lFlag == FLAG_SIMPLE_PRICE) {
+            lResults[0] = aToken0;
+            lResults[1] = aToken1;
+            lRouteLength = 2;
+        }
+            // composite route
+        else if (lFlag == FLAG_COMPOSITE_NEXT) {
+            address lToken =  address(uint160(uint256(lData >> 88)));
+            lResults[0] = aToken0;
+            lResults[1] = lToken;
+            lRouteLength = 2;
+            while(true) {
+                assembly {
+                    lData := sload(add(lSlot, sub(lRouteLength, 1)))
+                }
+                lToken =  address(uint160(uint256(lData >> 88)));
+                lResults[lRouteLength] = lToken;
+                lRouteLength += 1;
+
+                lFlag = lData >> 248;
+                if (lFlag == FLAG_COMPOSITE_END) break;
+                else { assert(lFlag == FLAG_COMPOSITE_NEXT); }
+            }
+        }
+            // no route
+        else {}
+
+        rRoute = new address[](lRouteLength);
+        for (uint i = 0; i < lRouteLength; ++i) {
+            rRoute[i] = lResults[i];
+        }
+    }
+
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
-        address[] memory lRoute = _route[lToken0][lToken1];
+        address[] memory lRoute = _route(lToken0, lToken1);
         if (lRoute.length == 0) revert PO_NoPath();
 
         uint256 lPrice = WAD;
