@@ -390,13 +390,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 }
 
                 (address lLowerToken, address lHigherToken) = aRoute[i - 1].sortTokens(aRoute[i]);
-                bytes32 lIntermediateRoutelSlot = _calculateSlot(lLowerToken, lHigherToken);
+                bytes32 lIntermediateRouteSlot = _calculateSlot(lLowerToken, lHigherToken);
                 bytes32 lRead;
                 assembly {
-                    lRead := sload(lIntermediateRoutelSlot)
+                    lRead := sload(lIntermediateRouteSlot)
                 }
                 if (lRead == bytes32(0)) {
-                    address[] memory lIntermediateRoute;
+                    address[] memory lIntermediateRoute = new address[](2);
                     lIntermediateRoute[0] = lLowerToken;
                     lIntermediateRoute[1] = lHigherToken;
                     setRoute(lLowerToken, lHigherToken, lIntermediateRoute);
@@ -410,6 +410,18 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 lLastToken := shl(88, lLastToken)
                 data := or(data, lLastToken)
                 sstore(add(lSlot, lIndex), data)
+            }
+            (address lLowerToken, address lHigherToken) = aRoute[aRoute.length - 2].sortTokens(aRoute[aRoute.length - 1]);
+            bytes32 lIntermediateRouteSlot = _calculateSlot(lLowerToken, lHigherToken);
+            bytes32 lRead;
+            assembly {
+                lRead := sload(lIntermediateRouteSlot)
+            }
+            if (lRead == bytes32(0)) {
+                address[] memory lIntermediateRoute = new address[](2);
+                lIntermediateRoute[0] = lLowerToken;
+                lIntermediateRoute[1] = lHigherToken;
+                setRoute(lLowerToken, lHigherToken, lIntermediateRoute);
             }
         }
         emit Route(aToken0, aToken1, aRoute);
