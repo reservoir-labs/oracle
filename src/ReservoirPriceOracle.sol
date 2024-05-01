@@ -20,6 +20,8 @@ import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointM
 import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
 
 import { console2 } from "forge-std/console2.sol";
+
+bytes32 constant FLAG_UNINITIALIZED = bytes32(uint256(0x00));
 bytes32 constant FLAG_SIMPLE_PRICE = bytes32(uint256(0x01));
 bytes32 constant FLAG_COMPOSITE_NEXT = bytes32(uint256(0x02));
 bytes32 constant FLAG_COMPOSITE_END = bytes32(uint256(0x03));
@@ -130,8 +132,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         return address(this).balance;
     }
 
-    function route(address aToken0, address aToken1) external view returns (address[] memory) {
-        return _route(aToken0, aToken1);
+    function route(address aToken0, address aToken1) external view returns (address[] memory rRoute) {
+        (rRoute,) = _getRouteAndPrice(aToken0, aToken1);
     }
 
     /// @notice The latest cached geometric TWAP of token1/token0, where the address of token0 is strictly less than the address of token1
@@ -139,6 +141,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// Supported price range: 1wei to 1e36, due to the need to support inverting price via `Utils.invertWad`
     /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
     /// Only stores prices of simple routes. Does not store prices of composite routes.
+    /// Returns 0 for prices of composite routes
     function priceCache(address aToken0, address aToken1) external view returns (uint256) {
         return _priceCache(aToken0, aToken1);
     }
@@ -153,7 +156,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
-        address[] memory lRoute = _route(lToken0, lToken1);
+        (address[] memory lRoute,) = _getRouteAndPrice(lToken0, lToken1);
         if (lRoute.length == 0) revert PO_NoPath();
 
         OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](lRoute.length - 1);
@@ -177,8 +180,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lQuote = lQueries[i].quote;
             uint256 lNewPrice = lNewPrices[i];
 
+            // assumed to be simple routes and therefore lPrevPrice should never be zero
+            // consider an optimization here for simple routes: no need to read the price cache again
+            // as it has been returned by _getRouteAndPrice in the beginning of the function
+            uint256 lPrevPrice = _priceCache(lBase, lQuote);
+
             // determine if price has moved beyond the threshold, and pay out reward if so
-            if (_calcPercentageDiff(_priceCache(lBase, lQuote), lNewPrice) >= priceDeviationThreshold) {
+            if (_calcPercentageDiff(lPrevPrice, lNewPrice) >= priceDeviationThreshold) {
                 _rewardUpdater(aRewardRecipient);
             }
 
@@ -289,7 +297,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         } else { } // do nothing if lPayoutAmt is greater than the balance
     }
 
-    function _route(address aToken0, address aToken1) internal view returns (address[] memory rRoute) {
+    /// @return rRoute The route to determine the price between aToken0 and aToken1
+    /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2)
+    function _getRouteAndPrice(address aToken0, address aToken1)
+        internal
+        view
+        returns (address[] memory rRoute, uint256 rPrice)
+    {
         address[] memory lResults = new address[](MAX_ROUTE_LENGTH);
         bytes32 lSlot = _calculateSlot(aToken0, aToken1);
 
@@ -298,47 +312,50 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         assembly {
             lData := sload(lSlot)
         }
-        bytes32 lFlag = lData >> 248; // we read the first byte of the word
+        bytes32 lFlag = lData >> 248; // we read the uppermost byte of the word
 
         // simple route
         if (lFlag == FLAG_SIMPLE_PRICE) {
             lResults[0] = aToken0;
             lResults[1] = aToken1;
             lRouteLength = 2;
+            rPrice = (lData & 0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff).toUint256();
         }
-            // composite route
+        // composite route
         else if (lFlag == FLAG_COMPOSITE_NEXT) {
-            address lToken =  address(uint160(uint256(lData >> 88)));
+            address[] memory lIntermediatePrices = new address[](MAX_ROUTE_LENGTH - 1);
+            address lToken = address(uint160(uint256(lData >> 88)));
             lResults[0] = aToken0;
             lResults[1] = lToken;
             lRouteLength = 2;
-            while(true) {
+            while (true) {
                 assembly {
                     lData := sload(add(lSlot, sub(lRouteLength, 1)))
                 }
-                lToken =  address(uint160(uint256(lData >> 88)));
+                lToken = address(uint160(uint256(lData >> 88)));
                 lResults[lRouteLength] = lToken;
                 lRouteLength += 1;
 
                 lFlag = lData >> 248;
                 if (lFlag == FLAG_COMPOSITE_END) break;
-                else { assert(lFlag == FLAG_COMPOSITE_NEXT); }
+                else assert(lFlag == FLAG_COMPOSITE_NEXT);
             }
         }
-            // no route
-        else {}
+        // no route
+        else if (lFlag == FLAG_UNINITIALIZED) { }
 
         rRoute = new address[](lRouteLength);
-        for (uint i = 0; i < lRouteLength; ++i) {
+        for (uint256 i = 0; i < lRouteLength; ++i) {
             rRoute[i] = lResults[i];
         }
     }
 
+    // performs an SLOAD to load the simple price
     function _priceCache(address aToken0, address aToken1) internal view returns (uint256) {
         bytes32 lSlot = _calculateSlot(aToken0, aToken1);
 
         bytes32 lData;
-        assembly  {
+        assembly {
             lData := sload(lSlot)
         }
         if (lData >> 248 == FLAG_SIMPLE_PRICE) {
@@ -355,7 +372,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
         if (lData >> 248 != FLAG_SIMPLE_PRICE) revert RPC_WRITE_TO_NON_SIMPLE_ROUTE();
 
-        lData = FLAG_SIMPLE_PRICE & bytes32(lNewPrice);
+        lData = (FLAG_SIMPLE_PRICE << 248) | bytes32(lNewPrice);
         assembly {
             sstore(lSlot, lData)
         }
@@ -364,19 +381,22 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
-        address[] memory lRoute = _route(lToken0, lToken1);
-        if (lRoute.length == 0) revert PO_NoPath();
+        (address[] memory lRoute, uint256 lPrice) = _getRouteAndPrice(lToken0, lToken1);
+        if (lRoute.length == 0) {
+            revert PO_NoPath();
+        }
+        // if composite route, read simple prices to derive composite price
+        else if (lRoute.length > 2) {
+            lPrice = WAD;
+            for (uint256 i = 0; i < lRoute.length - 1; ++i) {
+                (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
 
-        uint256 lPrice = WAD;
-        for (uint256 i = 0; i < lRoute.length - 1; ++i) {
-            // we need to sort token addresses again since intermediate path addresses are not guaranteed to be sorted
-            (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
-
-            // it is assumed that subroutes defined here are simple routes and not composite routes
-            // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
-            // therefore we do not check `_route` again to ensure that there is indeed a route
-            uint256 lRoutePrice = _priceCache(lLowerToken, lHigherToken);
-            lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
+                // it is assumed that subroutes defined here are simple routes and not composite routes
+                // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
+                // therefore we do not check `_route` again to ensure that there is indeed a route
+                uint256 lRoutePrice = _priceCache(lLowerToken, lHigherToken);
+                lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
+            }
         }
 
         // idea: can build a cache of decimals to save on making external calls?
@@ -492,7 +512,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 data := or(data, lLastToken)
                 sstore(add(lSlot, lIndex), data)
             }
-            (address lLowerToken, address lHigherToken) = aRoute[aRoute.length - 2].sortTokens(aRoute[aRoute.length - 1]);
+            (address lLowerToken, address lHigherToken) =
+                aRoute[aRoute.length - 2].sortTokens(aRoute[aRoute.length - 1]);
             bytes32 lIntermediateRouteSlot = _calculateSlot(lLowerToken, lHigherToken);
             bytes32 lRead;
             assembly {

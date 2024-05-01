@@ -11,7 +11,8 @@ import {
     OracleAccumulatorQuery,
     OracleAverageQuery,
     ReservoirPriceOracle,
-    IPriceOracle
+    IPriceOracle,
+    FLAG_SIMPLE_PRICE
 } from "src/ReservoirPriceOracle.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
@@ -25,12 +26,15 @@ contract ReservoirPriceOracleTest is BaseTest {
     // writes the cached prices, for easy testing
     function _writePriceCache(address aToken0, address aToken1, uint256 aPrice) internal {
         require(aToken0 < aToken1, "tokens unsorted");
+        require(bytes32(aPrice) & (FLAG_SIMPLE_PRICE << 248) == 0, "PRICE WILL OVERLAP FLAG");
+
+        bytes32 lPrice = (FLAG_SIMPLE_PRICE << 248) | bytes32(aPrice);
         vm.record();
         _oracle.priceCache(aToken0, aToken1);
         (bytes32[] memory lAccesses,) = vm.accesses(address(_oracle));
         require(lAccesses.length == 1, "incorrect number of accesses");
 
-        vm.store(address(_oracle), lAccesses[0], bytes32(aPrice));
+        vm.store(address(_oracle), lAccesses[0], lPrice);
     }
 
     constructor() {
@@ -51,6 +55,18 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         _oracle.setRoute(address(_tokenA), address(_tokenB), lRoute);
         _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
+    }
+
+    function testWritePriceCache(uint256 aPrice) external {
+        // arrange
+        uint256 lPrice = bound(aPrice, 1, 1e36);
+
+        // act
+        _writePriceCache(address(_tokenB), address(_tokenC), lPrice);
+
+        // assert
+        uint256 lQueriedPrice = _oracle.priceCache(address(_tokenB), address(_tokenC));
+        assertEq(lQueriedPrice, lPrice);
     }
 
     function testGasBountyAvailable(uint256 aBountyAmount) external {
