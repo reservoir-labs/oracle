@@ -19,8 +19,6 @@ import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGu
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
 import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
 
-import { console2 } from "forge-std/console2.sol";
-
 bytes32 constant FLAG_UNINITIALIZED = bytes32(uint256(0x00));
 bytes32 constant FLAG_SIMPLE_PRICE = bytes32(uint256(0x01));
 bytes32 constant FLAG_COMPOSITE_NEXT = bytes32(uint256(0x02));
