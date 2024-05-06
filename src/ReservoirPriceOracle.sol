@@ -476,13 +476,20 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             for (uint256 i = 1; i < aRoute.length - 1; ++i) {
                 address lNextToken = aRoute[i];
                 assembly {
-                    let data := shl(248, 0x02) // 0x02 in the uppermost byte
+                    // Set the uppermost byte to FLAG_COMPOSITE_NEXT.
+                    let data := shl(248, 0x02)
+                    // Combine the flag and the next token's address.
                     data := or(data, lNextToken)
-                    sstore(add(lSlot, lIndex), data) // need to do funny things with index?
+                    // Write this route segment to storage.
+                    sstore(add(lSlot, lIndex), data)
+                    // Increment index so the next route segment will be stored in the next storage slot.
                     lIndex := add(lIndex, 1)
                 }
-
+                // Intermediate segments of the route are not guaranteed to be sorted so we need to sort them.
                 (address lLowerToken, address lHigherToken) = aRoute[i - 1].sortTokens(aRoute[i]);
+
+                // Calculate the storage slot for this intermediate segment and read it to see if there is an existing
+                // route. If there isn't, we write it as well.
                 bytes32 lIntermediateRouteSlot = lLowerToken.calculateSlot(lHigherToken);
                 bytes32 lRead;
                 assembly {
@@ -499,12 +506,18 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             // last hop
             address lLastToken = aRoute[aRoute.length - 1];
             assembly {
-                let data := shl(248, 0x03) // 0x03 in the uppermost byte
+                // Set the uppermost byte of data to FLAG_COMPOSITE_END.
+                let data := shl(248, 0x03)
+                // Combine the flag with the token address.
                 data := or(data, lLastToken)
+                // Write this route segment to storage at the indexed slot.
                 sstore(add(lSlot, lIndex), data)
             }
             (address lLowerToken, address lHigherToken) =
                 aRoute[aRoute.length - 2].sortTokens(aRoute[aRoute.length - 1]);
+
+            // Calculate the storage slot for this intermediate segment and read it to see if there is an existing
+            // route. If there isn't, we write it as well.
             bytes32 lIntermediateRouteSlot = lLowerToken.calculateSlot(lHigherToken);
             bytes32 lRead;
             assembly {
