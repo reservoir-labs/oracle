@@ -346,6 +346,25 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
+    /// Calculate the storage slot for this intermediate segment and read it to see if there is an existing
+    /// route. If there isn't, we write it as well.
+    /// @dev assumed that aToken0 and aToken1 are not necessarily sorted
+    function _checkAndPopulateIntermediateRoute(address aToken0, address aToken1) internal {
+        (address lLowerToken, address lHigherToken) = aToken0.sortTokens(aToken1);
+
+        bytes32 lIntermediateRouteSlot = lLowerToken.calculateSlot(lHigherToken);
+        bytes32 lData;
+        assembly {
+            lData := sload(lIntermediateRouteSlot)
+        }
+        if (lData == bytes32(0)) {
+            address[] memory lIntermediateRoute = new address[](2);
+            lIntermediateRoute[0] = lLowerToken;
+            lIntermediateRoute[1] = lHigherToken;
+            setRoute(lLowerToken, lHigherToken, lIntermediateRoute);
+        }
+    }
+
     // performs an SLOAD to load the simple price
     function _priceCache(address aToken0, address aToken1) internal view returns (uint256) {
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
@@ -472,62 +491,21 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         else {
             uint256 lIndex = 0;
 
-            // first + intermediate hops
-            for (uint256 i = 1; i < aRoute.length - 1; ++i) {
+            // populate first + intermediate hops
+            for (uint256 i = 1; i < aRoute.length; ++i) {
                 address lNextToken = aRoute[i];
+
+                // Set the uppermost byte of data to FLAG_COMPOSITE_NEXT for intermediate hops or FLAG_COMPOSITE_END for the last hop.
+                bytes32 lData = (i == aRoute.length - 1 ? FLAG_COMPOSITE_END : FLAG_COMPOSITE_NEXT) << 248;
                 assembly {
-                    // Set the uppermost byte to FLAG_COMPOSITE_NEXT.
-                    let data := shl(248, 0x02)
                     // Combine the flag and the next token's address.
-                    data := or(data, lNextToken)
-                    // Write this route segment to storage.
-                    sstore(add(lSlot, lIndex), data)
+                    lData := or(lData, lNextToken)
+                    // Write this route segment to storage at the index slot.
+                    sstore(add(lSlot, lIndex), lData)
                     // Increment index so the next route segment will be stored in the next storage slot.
                     lIndex := add(lIndex, 1)
                 }
-                // Intermediate segments of the route are not guaranteed to be sorted so we need to sort them.
-                (address lLowerToken, address lHigherToken) = aRoute[i - 1].sortTokens(aRoute[i]);
-
-                // Calculate the storage slot for this intermediate segment and read it to see if there is an existing
-                // route. If there isn't, we write it as well.
-                bytes32 lIntermediateRouteSlot = lLowerToken.calculateSlot(lHigherToken);
-                bytes32 lRead;
-                assembly {
-                    lRead := sload(lIntermediateRouteSlot)
-                }
-                if (lRead == bytes32(0)) {
-                    address[] memory lIntermediateRoute = new address[](2);
-                    lIntermediateRoute[0] = lLowerToken;
-                    lIntermediateRoute[1] = lHigherToken;
-                    setRoute(lLowerToken, lHigherToken, lIntermediateRoute);
-                }
-            }
-
-            // last hop
-            address lLastToken = aRoute[aRoute.length - 1];
-            assembly {
-                // Set the uppermost byte of data to FLAG_COMPOSITE_END.
-                let data := shl(248, 0x03)
-                // Combine the flag with the token address.
-                data := or(data, lLastToken)
-                // Write this route segment to storage at the indexed slot.
-                sstore(add(lSlot, lIndex), data)
-            }
-            (address lLowerToken, address lHigherToken) =
-                aRoute[aRoute.length - 2].sortTokens(aRoute[aRoute.length - 1]);
-
-            // Calculate the storage slot for this intermediate segment and read it to see if there is an existing
-            // route. If there isn't, we write it as well.
-            bytes32 lIntermediateRouteSlot = lLowerToken.calculateSlot(lHigherToken);
-            bytes32 lRead;
-            assembly {
-                lRead := sload(lIntermediateRouteSlot)
-            }
-            if (lRead == bytes32(0)) {
-                address[] memory lIntermediateRoute = new address[](2);
-                lIntermediateRoute[0] = lLowerToken;
-                lIntermediateRoute[1] = lHigherToken;
-                setRoute(lLowerToken, lHigherToken, lIntermediateRoute);
+                _checkAndPopulateIntermediateRoute(aRoute[i - 1], lNextToken);
             }
         }
         emit Route(aToken0, aToken1, aRoute);
