@@ -320,7 +320,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         // composite route
         else if (lFlag == FLAG_COMPOSITE_NEXT) {
             address[] memory lIntermediatePrices = new address[](MAX_ROUTE_LENGTH - 1);
-            address lToken = address(uint160(uint256(lData >> 88)));
+            address lToken = address(uint160(uint256(lData)));
             lResults[0] = aToken0;
             lResults[1] = lToken;
             lRouteLength = 2;
@@ -328,7 +328,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 assembly {
                     lData := sload(add(lSlot, sub(lRouteLength, 1)))
                 }
-                lToken = address(uint160(uint256(lData >> 88)));
+                lToken = address(uint160(uint256(lData)));
                 lResults[lRouteLength] = lToken;
                 lRouteLength += 1;
 
@@ -477,7 +477,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 address lNextToken = aRoute[i];
                 assembly {
                     let data := shl(248, 0x02) // 0x02 in the uppermost byte
-                    lNextToken := shl(88, lNextToken)
                     data := or(data, lNextToken)
                     sstore(add(lSlot, lIndex), data) // need to do funny things with index?
                     lIndex := add(lIndex, 1)
@@ -501,7 +500,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lLastToken = aRoute[aRoute.length - 1];
             assembly {
                 let data := shl(248, 0x03) // 0x03 in the uppermost byte
-                lLastToken := shl(88, lLastToken)
                 data := or(data, lLastToken)
                 sstore(add(lSlot, lIndex), data)
             }
