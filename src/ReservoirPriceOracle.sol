@@ -451,9 +451,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @param aToken0 Address of the lower token
     /// @param aToken1 Address of the higher token
     /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived
-    // should we make this recursive, meaning for a route A-B-C-D
-    // besides defining A-D, A-B, B-C, and C-D, we also define
-    // A-B-C, B-C-D ?
     function setRoute(address aToken0, address aToken1, address[] memory aRoute) public onlyOwner {
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
