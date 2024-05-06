@@ -352,10 +352,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function _checkAndPopulateIntermediateRoute(address aToken0, address aToken1) internal {
         (address lLowerToken, address lHigherToken) = aToken0.sortTokens(aToken1);
 
-        bytes32 lIntermediateRouteSlot = lLowerToken.calculateSlot(lHigherToken);
+        bytes32 lSlot = lLowerToken.calculateSlot(lHigherToken);
         bytes32 lData;
         assembly {
-            lData := sload(lIntermediateRouteSlot)
+            lData := sload(lSlot)
         }
         if (lData == bytes32(0)) {
             address[] memory lIntermediateRoute = new address[](2);
@@ -450,7 +450,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     // sets a specific pair to serve as price feed for a certain route
-    // TODO: actually is it necessary to have so many args? Maybe all we need is whitelistPair(ReservoirPair)
     function designatePair(address aToken0, address aToken1, ReservoirPair aPair) external nonReentrant onlyOwner {
         (aToken0, aToken1) = aToken0.sortTokens(aToken1);
         assert(aToken0 == address(aPair.token0()) && aToken1 == address(aPair.token1()));
@@ -519,6 +518,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
+        // clear all storage slots that the route has written to previously
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
             assembly {
                 sstore(add(lSlot, i), 0)
