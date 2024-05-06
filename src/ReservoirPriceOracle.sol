@@ -482,7 +482,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         // simple route
         if (lRouteLength == 2) {
             assembly {
-                let data := shl(248, 0x01) // 0x01 in the uppermost byte
+                // Set the uppermost byte of data to FLAG_SIMPLE_PRICE.
+                let data := shl(248, 0x01)
+                // Write data to storage.
                 sstore(lSlot, data)
             }
             // update price for simple routes
@@ -494,7 +496,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             for (uint256 i = 1; i < lRouteLength; ++i) {
                 address lNextToken = aRoute[i];
 
-                // Set the uppermost byte of data to FLAG_COMPOSITE_NEXT for intermediate hops or FLAG_COMPOSITE_END for the last hop.
+                // Set the uppermost byte of lData to FLAG_COMPOSITE_NEXT for intermediate hops or FLAG_COMPOSITE_END for the last hop.
                 bytes32 lData = (i == lRouteLength - 1 ? FLAG_COMPOSITE_END : FLAG_COMPOSITE_NEXT) << 248;
                 assembly {
                     // Combine the flag and the next token's address.
