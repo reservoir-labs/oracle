@@ -53,8 +53,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         lRoute[0] = address(_tokenA);
         lRoute[1] = address(_tokenB);
 
-        _oracle.setRoute(address(_tokenA), address(_tokenB), lRoute);
         _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
+        _oracle.setRoute(address(_tokenA), address(_tokenB), lRoute);
     }
 
     function testWritePriceCache(uint256 aPrice) external {
@@ -320,6 +320,25 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // assert
         assertEq(address(this).balance, 0); // no reward as there's insufficient ether in the contract
+    }
+
+    function testUpdatePrice_BeyondThreshold_ZeroRecipient() external {
+        // arrange
+        uint256 lBalance = 10 ether;
+        deal(address(_oracle), lBalance);
+        _writePriceCache(address(_tokenA), address(_tokenB), 5e18);
+
+        skip(1);
+        _pair.sync();
+        skip(_oracle.twapPeriod() * 2);
+        _tokenA.mint(address(_pair), 2e18);
+        _pair.swap(2e18, true, address(this), "");
+
+        // act
+        _oracle.updatePrice(address(_tokenA), address(_tokenB), address(0));
+
+        // assert - no change to balance
+        assertEq(address(_oracle).balance, lBalance);
     }
 
     function testUpdatePrice_IntermediateRoutes() external {

@@ -150,8 +150,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// for priceCache[aTokenA][aTokenB] but instead the prices of its constituent simple routes will be written.
     /// @param aTokenA Address of one of the tokens for the price update. Does not have to be less than address of aTokenB
     /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
-    /// @param aRewardRecipient The beneficiary of the reward. Must implement the receive function if is a smart contract address
-    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
+    /// @param aRewardRecipient The beneficiary of the reward. Must implement the receive function if is a smart
+    /// contract address. Set to address(0) if not seeking a reward
+    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) public nonReentrant {
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
         (address[] memory lRoute,) = _getRouteAndPrice(lToken0, lToken1);
@@ -278,7 +279,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _rewardUpdater(address lRecipient) internal {
+    function _rewardUpdater(address aRecipient) internal {
+        if (aRecipient == address(0)) return;
+
         // N.B. Revisit this whenever deployment on a new chain is needed
         // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()` on ARB because the latter will always return
         // the demand insensitive base fee, while the former can return real higher fees during times of congestion
@@ -286,12 +289,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         uint256 lPayoutAmt = block.basefee * rewardGasAmount;
 
         if (lPayoutAmt <= address(this).balance) {
-            payable(lRecipient).transfer(lPayoutAmt);
+            payable(aRecipient).transfer(lPayoutAmt);
         } else { } // do nothing if lPayoutAmt is greater than the balance
     }
 
     /// @return rRoute The route to determine the price between aToken0 and aToken1
-    /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2)
+    /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise
     function _getRouteAndPrice(address aToken0, address aToken1)
         internal
         view
