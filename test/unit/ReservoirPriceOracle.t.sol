@@ -16,7 +16,7 @@ import {
 } from "src/ReservoirPriceOracle.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
-    using Utils for uint256;
+    using Utils for *;
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event Oracle(address newOracle);
@@ -492,15 +492,62 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.setRoute(lToken0, lToken1, lRoute);
         address[] memory lQueriedRoute = _oracle.route(lToken0, lToken1);
         assertEq(lQueriedRoute, lRoute);
+        _writePriceCache(lToken0, lToken1, 1e18);
 
         // act
-        vm.expectEmit(false, false, false, false);
+        vm.expectEmit(false, false, false, true);
         emit Route(lToken0, lToken1, new address[](0));
         _oracle.clearRoute(lToken0, lToken1);
 
         // assert
         lQueriedRoute = _oracle.route(lToken0, lToken1);
         assertEq(lQueriedRoute, new address[](0));
+        assertEq(_oracle.priceCache(lToken0, lToken1), 0);
+    }
+
+    function testClearRoute_AllWordsCleared() external {
+        // arrange
+        address[] memory lRoute = new address[](4);
+        lRoute[0] = address(_tokenA);
+        lRoute[1] = address(_tokenC);
+        lRoute[2] = address(_tokenB);
+        lRoute[3] = address(_tokenD);
+        _oracle.setRoute(address(_tokenA), address(_tokenD), lRoute);
+        address[] memory lQueriedRoute = _oracle.route(address(_tokenA), address(_tokenD));
+        assertEq(lQueriedRoute, lRoute);
+        bytes32 lSlot1 = address(_tokenA).calculateSlot(address(_tokenD));
+        bytes32 lSlot2 = bytes32(uint256(lSlot1) + 1);
+        bytes32 lSlot3 = bytes32(uint256(lSlot2) + 1);
+        bytes32 lData = vm.load(address(_oracle), lSlot3);
+        assertNotEq(lData, 0);
+
+        // act
+        vm.expectEmit(false, false, false, true);
+        emit Route(address(_tokenA), address(_tokenD), new address[](0));
+        _oracle.clearRoute(address(_tokenA), address(_tokenD));
+
+        // assert
+        lQueriedRoute = _oracle.route(address(_tokenA), address(_tokenD));
+        assertEq(lQueriedRoute, new address[](0));
+        // intermediate routes should still remain
+        lQueriedRoute = _oracle.route(address(_tokenB), address(_tokenC));
+        address[] memory lIntermediate1 = new address[](2);
+        lIntermediate1[0] = address(_tokenB);
+        lIntermediate1[1] = address(_tokenC);
+        assertEq(lQueriedRoute, lIntermediate1);
+        lQueriedRoute = _oracle.route(address(_tokenB), address(_tokenD));
+        address[] memory lIntermediate2 = new address[](2);
+        lIntermediate2[0] = address(_tokenB);
+        lIntermediate2[1] = address(_tokenD);
+        assertEq(lQueriedRoute, lIntermediate2);
+
+        // all used slots should be cleared
+        lData = vm.load(address(_oracle), lSlot1);
+        assertEq(lData, 0);
+        lData = vm.load(address(_oracle), lSlot2);
+        assertEq(lData, 0);
+        lData = vm.load(address(_oracle), lSlot3);
+        assertEq(lData, 0);
     }
 
     function testGetTimeWeightedAverage() external {

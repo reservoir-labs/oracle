@@ -263,11 +263,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     //                                 INTERNAL FUNCTIONS                                        //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    /// @dev aToken0 has to be strictly less than aToken1
-    function _calculateSlot(address aToken0, address aToken1) internal view returns (bytes32) {
-        return keccak256(abi.encode(aToken0, aToken1));
-    }
-
     function _validatePair(ReservoirPair aPair) internal pure {
         if (address(aPair) == address(0)) revert NoDesignatedPair();
     }
@@ -303,7 +298,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         returns (address[] memory rRoute, uint256 rPrice)
     {
         address[] memory lResults = new address[](MAX_ROUTE_LENGTH);
-        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
         bytes32 lData;
         uint256 lRouteLength;
@@ -350,7 +345,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     // performs an SLOAD to load the simple price
     function _priceCache(address aToken0, address aToken1) internal view returns (uint256) {
-        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
         bytes32 lData;
         assembly {
@@ -362,7 +357,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function _writePriceCache(address aToken0, address aToken1, uint256 lNewPrice) internal {
-        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
         bytes32 lData;
         assembly {
@@ -462,7 +457,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aRoute.length > MAX_ROUTE_LENGTH || aRoute.length < 2) revert RPC_INVALID_ROUTE_LENGTH();
         if (aRoute[0] != aToken0 || aRoute[aRoute.length - 1] != aToken1) revert RPC_INVALID_ROUTE();
 
-        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
         // simple route
         // gas: can store aRoute.length as a local variable
@@ -489,7 +484,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 }
 
                 (address lLowerToken, address lHigherToken) = aRoute[i - 1].sortTokens(aRoute[i]);
-                bytes32 lIntermediateRouteSlot = _calculateSlot(lLowerToken, lHigherToken);
+                bytes32 lIntermediateRouteSlot = lLowerToken.calculateSlot(lHigherToken);
                 bytes32 lRead;
                 assembly {
                     lRead := sload(lIntermediateRouteSlot)
@@ -512,7 +507,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             }
             (address lLowerToken, address lHigherToken) =
                 aRoute[aRoute.length - 2].sortTokens(aRoute[aRoute.length - 1]);
-            bytes32 lIntermediateRouteSlot = _calculateSlot(lLowerToken, lHigherToken);
+            bytes32 lIntermediateRouteSlot = lLowerToken.calculateSlot(lHigherToken);
             bytes32 lRead;
             assembly {
                 lRead := sload(lIntermediateRouteSlot)
@@ -531,11 +526,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
 
-        bytes32 lSlot = _calculateSlot(aToken0, aToken1);
+        (address[] memory lRoute,) = _getRouteAndPrice(aToken0, aToken1);
 
-        // TODO: we should clear subsequent words as well, i.e. everything this route has touched
-        assembly {
-            sstore(lSlot, 0)
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+
+        for (uint256 i = 0; i < lRoute.length - 1; ++i) {
+            assembly {
+                sstore(add(lSlot, i), 0)
+            }
         }
         emit Route(aToken0, aToken1, new address[](0));
     }

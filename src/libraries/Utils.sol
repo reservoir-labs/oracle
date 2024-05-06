@@ -12,6 +12,11 @@ library Utils {
         return tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
     }
 
+    /// @dev aToken0 has to be strictly less than aToken1
+    function calculateSlot(address aToken0, address aToken1) internal pure returns (bytes32) {
+        return keccak256(abi.encode(aToken0, aToken1));
+    }
+
     function invertWad(uint256 x) internal pure returns (uint256) {
         if (x > WAD_SQUARED || x == 0) revert PriceOutOfRange();
 
