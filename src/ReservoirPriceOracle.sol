@@ -492,7 +492,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         // composite route
         else {
             uint256 lIndex;
-            // populate first + intermediate hops
+            // populate all intermediate hops
             for (uint256 i = 1; i < lRouteLength; ++i) {
                 address lNextToken = aRoute[i];
 
