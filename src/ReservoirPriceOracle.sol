@@ -471,16 +471,17 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @param aToken1 Address of the higher token
     /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived
     function setRoute(address aToken0, address aToken1, address[] memory aRoute) public onlyOwner {
+        uint256 lRouteLength = aRoute.length;
+
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
-        if (aRoute.length > MAX_ROUTE_LENGTH || aRoute.length < 2) revert RPC_INVALID_ROUTE_LENGTH();
-        if (aRoute[0] != aToken0 || aRoute[aRoute.length - 1] != aToken1) revert RPC_INVALID_ROUTE();
+        if (lRouteLength > MAX_ROUTE_LENGTH || lRouteLength < 2) revert RPC_INVALID_ROUTE_LENGTH();
+        if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert RPC_INVALID_ROUTE();
 
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
         // simple route
-        // gas: can store aRoute.length as a local variable
-        if (aRoute.length == 2) {
+        if (lRouteLength == 2) {
             assembly {
                 let data := shl(248, 0x01) // 0x01 in the uppermost byte
                 sstore(lSlot, data)
@@ -489,14 +490,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
         // composite route
         else {
-            uint256 lIndex = 0;
-
+            uint256 lIndex;
             // populate first + intermediate hops
-            for (uint256 i = 1; i < aRoute.length; ++i) {
+            for (uint256 i = 1; i < lRouteLength; ++i) {
                 address lNextToken = aRoute[i];
 
                 // Set the uppermost byte of data to FLAG_COMPOSITE_NEXT for intermediate hops or FLAG_COMPOSITE_END for the last hop.
-                bytes32 lData = (i == aRoute.length - 1 ? FLAG_COMPOSITE_END : FLAG_COMPOSITE_NEXT) << 248;
+                bytes32 lData = (i == lRouteLength - 1 ? FLAG_COMPOSITE_END : FLAG_COMPOSITE_NEXT) << 248;
                 assembly {
                     // Combine the flag and the next token's address.
                     lData := or(lData, lNextToken)
