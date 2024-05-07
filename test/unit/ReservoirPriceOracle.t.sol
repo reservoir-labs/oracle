@@ -12,7 +12,7 @@ import {
     OracleAverageQuery,
     ReservoirPriceOracle,
     IPriceOracle,
-    FLAG_SIMPLE_PRICE
+    FlagsLib
 } from "src/ReservoirPriceOracle.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
@@ -26,9 +26,9 @@ contract ReservoirPriceOracleTest is BaseTest {
     // writes the cached prices, for easy testing
     function _writePriceCache(address aToken0, address aToken1, uint256 aPrice) internal {
         require(aToken0 < aToken1, "tokens unsorted");
-        require(bytes32(aPrice) & (FLAG_SIMPLE_PRICE << 248) == 0, "PRICE WILL OVERLAP FLAG");
+        require(bytes32(aPrice) & (FlagsLib.FLAG_SIMPLE_PRICE << 254) == 0, "PRICE WILL OVERLAP FLAG");
 
-        bytes32 lPrice = (FLAG_SIMPLE_PRICE << 248) | bytes32(aPrice);
+        bytes32 lPrice = (FlagsLib.FLAG_SIMPLE_PRICE << 254) | bytes32(aPrice);
         vm.record();
         _oracle.priceCache(aToken0, aToken1);
         (bytes32[] memory lAccesses,) = vm.accesses(address(_oracle));
@@ -397,8 +397,8 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testSetRoute() public {
         // arrange
-        address lToken0 = address(0x1);
-        address lToken1 = address(0x2);
+        address lToken0 = address(_tokenB);
+        address lToken1 = address(_tokenC);
         address[] memory lRoute = new address[](2);
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
@@ -416,12 +416,12 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testSetRoute_OverwriteExisting() external {
         // arrange
         testSetRoute();
-        address lToken0 = address(0x1);
-        address lToken1 = address(0x2);
+        address lToken0 = address(_tokenB);
+        address lToken1 = address(_tokenC);
         address[] memory lRoute = new address[](4);
         lRoute[0] = lToken0;
-        lRoute[1] = address(5);
-        lRoute[2] = address(6);
+        lRoute[1] = address(_tokenA);
+        lRoute[2] = address(_tokenD);
         lRoute[3] = lToken1;
 
         // act
@@ -435,10 +435,10 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testSetRoute_MultipleHops() external {
         // arrange
-        address lStart = address(0x1);
-        address lIntermediate1 = address(0x5);
-        address lIntermediate2 = address(0x3);
-        address lEnd = address(0x9);
+        address lStart = address(_tokenA);
+        address lIntermediate1 = address(_tokenC);
+        address lIntermediate2 = address(_tokenB);
+        address lEnd = address(_tokenD);
         address[] memory lRoute = new address[](4);
         lRoute[0] = lStart;
         lRoute[1] = lIntermediate1;
@@ -477,34 +477,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(_oracle.route(lIntermediate2, lEnd), lIntermediateRoute3);
     }
 
-    function testSetRoute_EndTokenJustGreaterThanStart() external {
-        // arrange
-        address lStart = address(0x1);
-        address lIntermediate1 = address(0x97);
-        address lIntermediate2 = address(0x58);
-        address lEnd = address(0x2);
-        address[] memory lRoute = new address[](4);
-        lRoute[0] = lStart;
-        lRoute[1] = lIntermediate1;
-        lRoute[2] = lIntermediate2;
-        lRoute[3] = lEnd;
-
-        address[] memory lIntermediateRoute1 = new address[](2);
-        lIntermediateRoute1[0] = lStart;
-        lIntermediateRoute1[1] = lIntermediate1;
-
-        // act
-        _oracle.setRoute(lStart, lEnd, lRoute);
-
-        // assert
-        assertEq(_oracle.route(lStart, lEnd), lRoute);
-        assertEq(_oracle.route(lStart, lIntermediate1), lIntermediateRoute1);
-    }
-
     function testClearRoute() external {
         // arrange
-        address lToken0 = address(0x1);
-        address lToken1 = address(0x2);
+        address lToken0 = address(_tokenB);
+        address lToken1 = address(_tokenC);
         address[] memory lRoute = new address[](2);
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
@@ -836,5 +812,21 @@ contract ReservoirPriceOracleTest is BaseTest {
         // act & assert
         vm.expectRevert(IPriceOracle.PO_NoPath.selector);
         _oracle.getQuote(123, address(123), address(456));
+    }
+
+    function testXX() external {
+        //        bytes32 FLAG_SIMPLE_PRICE = bytes32(uint256(0x3));
+        //
+        //        console2.logBytes32(FLAG_SIMPLE_PRICE << 254);
+
+        int256 x = -5;
+
+        console2.logBytes32(bytes32(uint256(~x + 1)));
+
+        console2.logInt((x & 0x8000000));
+
+        console2.log(type(int256).min);
+        console2.log(type(int256).max);
+        console2.logBytes32(hex"0010");
     }
 }

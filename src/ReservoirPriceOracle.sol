@@ -18,15 +18,11 @@ import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
 import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
-
-bytes32 constant FLAG_UNINITIALIZED = bytes32(uint256(0x00));
-bytes32 constant FLAG_SIMPLE_PRICE = bytes32(uint256(0x01));
-bytes32 constant FLAG_COMPOSITE_NEXT = bytes32(uint256(0x02));
-bytes32 constant FLAG_COMPOSITE_END = bytes32(uint256(0x03));
+import { FlagsLib } from "src/libraries/FlagsLib.sol";
 
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using FixedPointMathLib for uint256;
-    using Bytes32Lib for bytes32;
+    using FlagsLib for bytes32;
     using QueryProcessor for ReservoirPair;
     using Utils for *;
 
@@ -61,6 +57,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     error RPC_INVALID_ROUTE_LENGTH();
     error RPC_INVALID_ROUTE();
     error RPC_WRITE_TO_NON_SIMPLE_ROUTE();
+    error RPC_UNSUPPORTED_TOKEN_DECIMALS();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
@@ -131,7 +128,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function route(address aToken0, address aToken1) external view returns (address[] memory rRoute) {
-        (rRoute,) = _getRouteAndPrice(aToken0, aToken1);
+        (rRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
     }
 
     /// @notice The latest cached geometric TWAP of token1/token0, where the address of token0 is strictly less than the address of token1
@@ -155,7 +152,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) public nonReentrant {
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
-        (address[] memory lRoute,) = _getRouteAndPrice(lToken0, lToken1);
+        (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert PO_NoPath();
 
         OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](lRoute.length - 1);
@@ -181,7 +178,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
             // assumed to be simple routes and therefore lPrevPrice should never be zero
             // consider an optimization here for simple routes: no need to read the price cache again
-            // as it has been returned by _getRouteAndPrice in the beginning of the function
+            // as it has been returned by _getRouteDecimalDifferencePrice in the beginning of the function
             uint256 lPrevPrice = _priceCache(lBase, lQuote);
 
             // determine if price has moved beyond the threshold, and pay out reward if so
@@ -294,11 +291,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     /// @return rRoute The route to determine the price between aToken0 and aToken1
+    /// @return rDecimalDiff The result of token1.decimals() - token0.decimals()
     /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise
-    function _getRouteAndPrice(address aToken0, address aToken1)
+    function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
         internal
         view
-        returns (address[] memory rRoute, uint256 rPrice)
+        returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice)
     {
         address[] memory lResults = new address[](MAX_ROUTE_LENGTH);
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
@@ -308,17 +306,18 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         assembly {
             lData := sload(lSlot)
         }
-        bytes32 lFlag = lData >> 248; // we read the uppermost byte of the word
+        bytes32 lFlag = lData.getRouteFlag(); // we read the uppermost 2 bits8 of the word
 
         // simple route
-        if (lFlag == FLAG_SIMPLE_PRICE) {
+        if (lFlag == FlagsLib.FLAG_SIMPLE_PRICE) {
             lResults[0] = aToken0;
             lResults[1] = aToken1;
             lRouteLength = 2;
-            rPrice = (lData & 0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff).toUint256();
+            rDecimalDiff = lData.getDecimalDifference();
+            rPrice = lData.getPrice();
         }
         // composite route
-        else if (lFlag == FLAG_COMPOSITE_NEXT) {
+        else if (lFlag == FlagsLib.FLAG_COMPOSITE_NEXT) {
             address[] memory lIntermediatePrices = new address[](MAX_ROUTE_LENGTH - 1);
             address lToken = address(uint160(uint256(lData)));
             lResults[0] = aToken0;
@@ -332,13 +331,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 lResults[lRouteLength] = lToken;
                 lRouteLength += 1;
 
-                lFlag = lData >> 248;
-                if (lFlag == FLAG_COMPOSITE_END) break;
-                else assert(lFlag == FLAG_COMPOSITE_NEXT);
+                lFlag = lData.getRouteFlag();
+                if (lFlag == FlagsLib.FLAG_COMPOSITE_END) break;
+                else assert(lFlag == FlagsLib.FLAG_COMPOSITE_NEXT);
             }
         }
         // no route
-        else if (lFlag == FLAG_UNINITIALIZED) { }
+        else if (lFlag == FlagsLib.FLAG_UNINITIALIZED) { }
 
         rRoute = new address[](lRouteLength);
         for (uint256 i = 0; i < lRouteLength; ++i) {
@@ -373,8 +372,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         assembly {
             lData := sload(lSlot)
         }
-        if (lData >> 248 == FLAG_SIMPLE_PRICE) {
-            return (lData & 0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff).toUint256();
+        if (lData.isSimplePrice()) {
+            return lData.getPrice();
         }
     }
 
@@ -385,9 +384,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         assembly {
             lData := sload(lSlot)
         }
-        if (lData >> 248 != FLAG_SIMPLE_PRICE) revert RPC_WRITE_TO_NON_SIMPLE_ROUTE();
+        if (!lData.isSimplePrice()) revert RPC_WRITE_TO_NON_SIMPLE_ROUTE();
 
-        lData = (FLAG_SIMPLE_PRICE << 248) | bytes32(lNewPrice);
+        int256 lDiff = lData.getDecimalDifference();
+
+        lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDiff) | bytes32(lNewPrice);
         assembly {
             sstore(lSlot, lData)
         }
@@ -396,7 +397,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
-        (address[] memory lRoute, uint256 lPrice) = _getRouteAndPrice(lToken0, lToken1);
+        (address[] memory lRoute, int256 lDecimalMultiplier, uint256 lPrice) =
+            _getRouteDecimalDifferencePrice(lToken0, lToken1);
+
         if (lRoute.length == 0) {
             revert PO_NoPath();
         }
@@ -413,10 +416,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
             }
         }
-
-        // idea: can build a cache of decimals to save on making external calls?
-        uint256 lBaseDecimals = IERC20(aBase).decimals();
-        uint256 lQuoteDecimals = IERC20(aQuote).decimals();
 
         lPrice = lToken0 == aBase ? lPrice : lPrice.invertWad();
         // quoteAmountOut = baseAmountIn * wadPrice * quoteDecimalScale / baseDecimalScale / WAD
@@ -481,13 +480,17 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         // simple route
         if (lRouteLength == 2) {
+            uint256 lToken0Decimals = IERC20(aToken0).decimals();
+            uint256 lToken1Decimals = IERC20(aToken1).decimals();
+            if (lToken0Decimals > 18 || lToken1Decimals > 18) revert RPC_UNSUPPORTED_TOKEN_DECIMALS();
+
+            int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
+
+            bytes32 lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDiff);
             assembly {
-                // Set the uppermost byte of data to FLAG_SIMPLE_PRICE.
-                let data := shl(248, 0x01)
                 // Write data to storage.
-                sstore(lSlot, data)
+                sstore(lSlot, lData)
             }
-            // update price for simple routes
         }
         // composite route
         else {
@@ -497,7 +500,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 address lNextToken = aRoute[i];
 
                 // Set the uppermost byte of lData to FLAG_COMPOSITE_NEXT for intermediate hops or FLAG_COMPOSITE_END for the last hop.
-                bytes32 lData = (i == lRouteLength - 1 ? FLAG_COMPOSITE_END : FLAG_COMPOSITE_NEXT) << 248;
+                bytes32 lData =
+                    (i == lRouteLength - 1 ? FlagsLib.FLAG_COMPOSITE_END : FlagsLib.FLAG_COMPOSITE_NEXT) << 254;
                 assembly {
                     // Combine the flag and the next token's address.
                     lData := or(lData, lNextToken)
@@ -516,7 +520,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
 
-        (address[] memory lRoute,) = _getRouteAndPrice(aToken0, aToken1);
+        (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
 
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
