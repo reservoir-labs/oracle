@@ -346,7 +346,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     /// Calculate the storage slot for this intermediate segment and read it to see if there is an existing
-    /// route. If there isn't, we write it as well.
+    /// route. If there isn't an existing route, we write it as well.
     /// @dev assumed that aToken0 and aToken1 are not necessarily sorted
     function _checkAndPopulateIntermediateRoute(address aToken0, address aToken1) internal {
         (address lLowerToken, address lHigherToken) = aToken0.sortTokens(aToken1);
@@ -510,23 +510,39 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
         // composite route
         else {
-            uint256 lIndex;
-            // populate all intermediate hops
-            for (uint256 i = 1; i < lRouteLength; ++i) {
-                address lNextToken = aRoute[i];
+            address lSecondToken = aRoute[1];
+            address lThirdToken = aRoute[2];
+            // Set the uppermost byte of lFirstWord to FLAG_COMPOSITE_NEXT for intermediate hops
+            bytes32 lFirstWord = FlagsLib.FLAG_COMPOSITE_NEXT << 248;
+            // Move the address to start on the 2nd byte.
+            bytes32 lSecondTokenData = bytes32(bytes20(lSecondToken)) >> 8;
+            bytes32 lThirdTokenFirst10Bytes = bytes32(bytes20(lThirdToken)) >> 176;
 
-                // Set the uppermost byte of lData to FLAG_COMPOSITE_NEXT for intermediate hops or FLAG_COMPOSITE_END for the last hop.
-                bytes32 lData =
-                    (i == lRouteLength - 1 ? FlagsLib.FLAG_COMPOSITE_END : FlagsLib.FLAG_COMPOSITE_NEXT) << 254;
-                assembly {
-                    // Combine the flag and the next token's address.
-                    lData := or(lData, lNextToken)
-                    // Write this route segment to storage at the index slot.
-                    sstore(add(lSlot, lIndex), lData)
-                    // Increment index so the next route segment will be stored in the next storage slot.
-                    lIndex := add(lIndex, 1)
-                }
-                _checkAndPopulateIntermediateRoute(aRoute[i - 1], lNextToken);
+            // Trim away the first 10 bytes since we only want the last 10 bytes.
+            bytes32 lThirdTokenSecond10Bytes = bytes32(bytes20(lThirdToken) << 80);
+            bytes32 lSecondWord;
+
+            if (lRouteLength == 3) {
+                // Set flag before third token to FLAG_COMPOSITE_END
+                lFirstWord = lFirstWord | lSecondTokenData | FlagsLib.FLAG_COMPOSITE_END << 80 | lThirdTokenFirst10Bytes;
+
+                lSecondWord = lThirdTokenSecond10Bytes;
+            } else if (lRouteLength == 4) {
+                // Set flag before third token to FLAG_COMPOSITE_NEXT as there are 4 tokens in total
+                lFirstWord = lFirstWord | lSecondTokenData | FlagsLib.FLAG_COMPOSITE_NEXT << 80 | lThirdTokenFirst10Bytes;
+
+                bytes32 lFourthTokenData = bytes32(bytes20(aToken1)) >> 88;
+                lSecondWord = lThirdTokenSecond10Bytes | FlagsLib.FLAG_COMPOSITE_END << 168 | lFourthTokenData;
+
+                _checkAndPopulateIntermediateRoute(lThirdToken, aToken1);
+            }
+            _checkAndPopulateIntermediateRoute(aToken0, lSecondToken);
+            _checkAndPopulateIntermediateRoute(lSecondToken, lThirdToken);
+
+            // Write the two words of route into storage.
+            assembly {
+                sstore(lSlot, lFirstWord)
+                sstore(add(lSlot, 1), lSecondWord)
             }
         }
         emit Route(aToken0, aToken1, aRoute);
@@ -541,9 +557,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
         // clear all storage slots that the route has written to previously
-        for (uint256 i = 0; i < lRoute.length - 1; ++i) {
+        assembly {
+            sstore(lSlot, 0)
+        }
+        // routes with length 3/4 use two words of storage
+        if (lRoute.length > 2) {
             assembly {
-                sstore(add(lSlot, i), 0)
+                sstore(add(lSlot, 1), 0)
             }
         }
         emit Route(aToken0, aToken1, new address[](0));
