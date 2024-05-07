@@ -11,6 +11,7 @@ import {
     OracleAccumulatorQuery,
     OracleAverageQuery,
     ReservoirPriceOracle,
+    IERC20,
     IPriceOracle,
     FlagsLib
 } from "src/ReservoirPriceOracle.sol";
@@ -65,7 +66,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         _writePriceCache(address(_tokenB), address(_tokenC), lPrice);
 
         // assert
-        uint256 lQueriedPrice = _oracle.priceCache(address(_tokenB), address(_tokenC));
+        (uint256 lQueriedPrice,) = _oracle.priceCache(address(_tokenB), address(_tokenC));
         assertEq(lQueriedPrice, lPrice);
     }
 
@@ -110,7 +111,8 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // arrange
         _writePriceCache(address(_tokenA), address(_tokenB), lPrice);
-        assertEq(_oracle.priceCache(address(_tokenA), address(_tokenB)), lPrice);
+        (uint256 lQueriedPrice,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
+        assertEq(lQueriedPrice, lPrice);
 
         // act
         uint256 lAmountOut = _oracle.getQuote(lAmountIn, address(_tokenB), address(_tokenA));
@@ -238,7 +240,8 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testUpdatePrice_FirstUpdate() external {
         // sanity
-        assertEq(_oracle.priceCache(address(_tokenA), address(_tokenB)), 0);
+        (uint256 lPrice,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
+        assertEq(lPrice, 0);
 
         // arrange
         deal(address(_oracle), 1 ether);
@@ -253,8 +256,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updatePrice(address(_tokenB), address(_tokenA), address(this));
 
         // assert
-        assertEq(_oracle.priceCache(address(_tokenA), address(_tokenB)), 98_918_868_099_219_913_512);
-        assertEq(_oracle.priceCache(address(_tokenB), address(_tokenA)), 0);
+        (lPrice,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
+        assertEq(lPrice, 98_918_868_099_219_913_512);
+        (lPrice,) = _oracle.priceCache(address(_tokenB), address(_tokenA));
+        assertEq(lPrice, 0);
         assertEq(address(this).balance, 0); // there should be no reward for the first price update
     }
 
@@ -273,8 +278,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updatePrice(address(_tokenB), address(_tokenA), address(this));
 
         // assert
-        assertEq(_oracle.priceCache(address(_tokenA), address(_tokenB)), 98_918_868_099_219_913_512);
-        assertEq(_oracle.priceCache(address(_tokenB), address(_tokenA)), 0);
+        (uint256 lPrice,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
+        assertEq(lPrice, 98_918_868_099_219_913_512);
+        (lPrice,) = _oracle.priceCache(address(_tokenB), address(_tokenA));
+        assertEq(lPrice, 0);
         assertEq(address(this).balance, 0); // no reward since price is within threshold
     }
 
@@ -296,8 +303,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updatePrice(address(_tokenB), address(_tokenA), address(this));
 
         // assert
-        assertEq(_oracle.priceCache(address(_tokenA), address(_tokenB)), 98_918_868_099_219_913_512);
-        assertEq(_oracle.priceCache(address(_tokenB), address(_tokenA)), 0);
+        (uint256 lPrice,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
+        assertEq(lPrice, 98_918_868_099_219_913_512);
+        (lPrice,) = _oracle.priceCache(address(_tokenB), address(_tokenA));
+        assertEq(lPrice, 0);
         assertEq(address(this).balance, block.basefee * _oracle.rewardGasAmount());
     }
 
@@ -385,10 +394,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updatePrice(address(_tokenA), address(_tokenB), address(this));
 
         // assert
-        uint256 lPriceAC = _oracle.priceCache(lStart, lIntermediate1);
-        uint256 lPriceCD = _oracle.priceCache(lIntermediate1, lIntermediate2);
-        uint256 lPriceBD = _oracle.priceCache(lEnd, lIntermediate2);
-        uint256 lPriceAB = _oracle.priceCache(lStart, lEnd);
+        (uint256 lPriceAC,) = _oracle.priceCache(lStart, lIntermediate1);
+        (uint256 lPriceCD,) = _oracle.priceCache(lIntermediate1, lIntermediate2);
+        (uint256 lPriceBD,) = _oracle.priceCache(lEnd, lIntermediate2);
+        (uint256 lPriceAB,) = _oracle.priceCache(lStart, lEnd);
         assertApproxEqRel(lPriceAC, 0.5e18, 0.0001e18);
         assertApproxEqRel(lPriceCD, 2e18, 0.0001e18);
         assertApproxEqRel(lPriceBD, 2e18, 0.0001e18);
@@ -411,6 +420,9 @@ contract ReservoirPriceOracleTest is BaseTest {
         // assert
         address[] memory lQueriedRoute = _oracle.route(lToken0, lToken1);
         assertEq(lQueriedRoute, lRoute);
+        (, int256 lDecimalDiff) = _oracle.priceCache(lToken0, lToken1);
+        int256 lActualDiff = int256(uint256(IERC20(lToken1).decimals())) - int256(uint256(IERC20(lToken0).decimals()));
+        assertEq(lDecimalDiff, lActualDiff);
     }
 
     function testSetRoute_OverwriteExisting() external {
@@ -497,7 +509,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         // assert
         lQueriedRoute = _oracle.route(lToken0, lToken1);
         assertEq(lQueriedRoute, new address[](0));
-        assertEq(_oracle.priceCache(lToken0, lToken1), 0);
+        (uint256 lPrice, ) = _oracle.priceCache(lToken0, lToken1);
+        assertEq(lPrice, 0);
     }
 
     function testClearRoute_AllWordsCleared() external {
@@ -828,5 +841,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         console2.log(type(int256).min);
         console2.log(type(int256).max);
         console2.logBytes32(hex"0010");
+
+        uint256 a = 5;
     }
 }

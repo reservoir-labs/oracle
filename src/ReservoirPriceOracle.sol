@@ -137,8 +137,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
     /// Only stores prices of simple routes. Does not store prices of composite routes.
     /// Returns 0 for prices of composite routes
-    function priceCache(address aToken0, address aToken1) external view returns (uint256) {
-        return _priceCache(aToken0, aToken1);
+    function priceCache(address aToken0, address aToken1) external view returns (uint256 rPrice, int256 rDecimalDiff) {
+        (rPrice, rDecimalDiff) = _priceCache(aToken0, aToken1);
     }
 
     /// @notice Updates the TWAP price for all simple routes between `aTokenA` and `aTokenB`. Will also update intermediate routes if the route defined between
@@ -179,7 +179,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             // assumed to be simple routes and therefore lPrevPrice should never be zero
             // consider an optimization here for simple routes: no need to read the price cache again
             // as it has been returned by _getRouteDecimalDifferencePrice in the beginning of the function
-            uint256 lPrevPrice = _priceCache(lBase, lQuote);
+            (uint256 lPrevPrice,) = _priceCache(lBase, lQuote);
 
             // determine if price has moved beyond the threshold, and pay out reward if so
             if (_calcPercentageDiff(lPrevPrice, lNewPrice) >= priceDeviationThreshold) {
@@ -291,7 +291,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     /// @return rRoute The route to determine the price between aToken0 and aToken1
-    /// @return rDecimalDiff The result of token1.decimals() - token0.decimals()
+    /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise
     /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise
     function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
         internal
@@ -365,7 +365,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     // performs an SLOAD to load the simple price
-    function _priceCache(address aToken0, address aToken1) internal view returns (uint256) {
+    function _priceCache(address aToken0, address aToken1)
+        internal
+        view
+        returns (uint256 rPrice, int256 rDecimalDiff)
+    {
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
         bytes32 lData;
@@ -373,7 +377,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             lData := sload(lSlot)
         }
         if (lData.isSimplePrice()) {
-            return lData.getPrice();
+            rPrice = lData.getPrice();
+            rDecimalDiff = lData.getDecimalDifference();
         }
     }
 
@@ -397,7 +402,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
-        (address[] memory lRoute, int256 lDecimalMultiplier, uint256 lPrice) =
+        (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
         if (lRoute.length == 0) {
