@@ -417,14 +417,25 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 // it is assumed that subroutes defined here are simple routes and not composite routes
                 // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
                 // therefore we do not check `_route` again to ensure that there is indeed a route
-                uint256 lRoutePrice = _priceCache(lLowerToken, lHigherToken);
+                (uint256 lRoutePrice, int256 lRouteDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
+                lDecimalDiff += lRouteDecimalDiff;
                 lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
             }
         }
 
         lPrice = lToken0 == aBase ? lPrice : lPrice.invertWad();
+        lDecimalDiff = lToken0 == aBase ? lDecimalDiff : -lDecimalDiff;
+
         // quoteAmountOut = baseAmountIn * wadPrice * quoteDecimalScale / baseDecimalScale / WAD
-        rOut = (aAmount * lPrice).fullMulDiv(10 ** lQuoteDecimals, (10 ** lBaseDecimals) * WAD);
+        if (lDecimalDiff > 0) {
+            rOut = (aAmount * lPrice).fullMulDiv(10 ** uint256(lDecimalDiff), WAD);
+        } else if (lDecimalDiff < 0) {
+            rOut = aAmount.fullMulDiv(lPrice, 10 ** uint256(-lDecimalDiff) * WAD);
+        }
+        // equal decimals
+        else {
+            rOut = aAmount.fullMulDiv(lPrice, WAD);
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////

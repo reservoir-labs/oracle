@@ -18,6 +18,7 @@ import {
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
+    using FlagsLib for bytes32;
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event Oracle(address newOracle);
@@ -29,13 +30,14 @@ contract ReservoirPriceOracleTest is BaseTest {
         require(aToken0 < aToken1, "tokens unsorted");
         require(bytes32(aPrice) & (FlagsLib.FLAG_SIMPLE_PRICE << 254) == 0, "PRICE WILL OVERLAP FLAG");
 
-        bytes32 lPrice = (FlagsLib.FLAG_SIMPLE_PRICE << 254) | bytes32(aPrice);
         vm.record();
         _oracle.priceCache(aToken0, aToken1);
         (bytes32[] memory lAccesses,) = vm.accesses(address(_oracle));
         require(lAccesses.length == 1, "incorrect number of accesses");
 
-        vm.store(address(_oracle), lAccesses[0], lPrice);
+        int256 lDecimalDiff = int256(uint256(IERC20(aToken1).decimals())) - int256(uint256(IERC20(aToken0).decimals()));
+        bytes32 lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDecimalDiff) | bytes32(aPrice);
+        vm.store(address(_oracle), lAccesses[0], lData);
     }
 
     constructor() {
@@ -202,6 +204,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         // assert
         assertEq(lAmountOut, 0);
     }
+
+    function testGetQuote_SameBaseQuote() external { }
 
     function testUpdatePriceDeviationThreshold(uint256 aNewThreshold) external {
         // assume
@@ -509,7 +513,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         // assert
         lQueriedRoute = _oracle.route(lToken0, lToken1);
         assertEq(lQueriedRoute, new address[](0));
-        (uint256 lPrice, ) = _oracle.priceCache(lToken0, lToken1);
+        (uint256 lPrice,) = _oracle.priceCache(lToken0, lToken1);
         assertEq(lPrice, 0);
     }
 
