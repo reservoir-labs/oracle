@@ -10,32 +10,23 @@ contract FlagsLibTest is Test {
     using FlagsLib for int256;
 
     function testGetDecimalDifference() external {
-        bytes32 lPositive = hex"1f";
-        bytes32 lNegative = hex"3f";
-
-        assertEq(lPositive.getDecimalDifference(), 31);
-        assertEq(lNegative.getDecimalDifference(), -31);
-    }
-
-    function testPackDecimalDifference(int256 aDiff) external {
         // arrange
-        int256 lDiff = bound(aDiff, -18, 18);
-
-        // act
-        bytes32 lPacked = lDiff.packDecimalDifference();
-
-        // assert
-        assertEq(lDiff, lPacked.getDecimalDifference());
-    }
-
-    function testPackDecimalDifference_BeyondRange() external {
-        // arrange
-        int256 lDiff = -20;
+        bytes32 lPositive = hex"0012";
+        bytes32 lNegative = hex"00ee";
+        bytes32 lZero = hex"0000";
 
         // act & assert
-        vm.expectRevert(FlagsLib.DECIMAL_DIFF_OUT_OF_RANGE.selector);
-        lDiff.packDecimalDifference();
+        assertEq(lPositive.getDecimalDifference(), 18);
+        assertEq(lNegative.getDecimalDifference(), -18);
+        assertEq(lZero.getDecimalDifference(), 0);
     }
 
-    function testCombine() external { }
+    function testCombine(int8 aDiff) external {
+        // act
+        bytes32 lResult = FlagsLib.FLAG_SIMPLE_PRICE.combine(aDiff);
+
+        // assert
+        assertEq(lResult[0], hex"01");
+        assertEq(lResult[1], bytes1(uint8(aDiff)));
+    }
 }

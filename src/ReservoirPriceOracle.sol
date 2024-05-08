@@ -17,7 +17,6 @@ import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
-import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
 import { FlagsLib } from "src/libraries/FlagsLib.sol";
 
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {

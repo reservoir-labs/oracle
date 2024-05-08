@@ -15,10 +15,12 @@ import {
     IPriceOracle,
     FlagsLib
 } from "src/ReservoirPriceOracle.sol";
+import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
     using FlagsLib for bytes32;
+    using Bytes32Lib for *;
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event Oracle(address newOracle);
@@ -28,7 +30,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     // writes the cached prices, for easy testing
     function _writePriceCache(address aToken0, address aToken1, uint256 aPrice) internal {
         require(aToken0 < aToken1, "tokens unsorted");
-        require(bytes32(aPrice) & (FlagsLib.FLAG_SIMPLE_PRICE << 254) == 0, "PRICE WILL OVERLAP FLAG");
+        require(bytes32(aPrice) & bytes1(0xff) == 0, "PRICE WILL OVERLAP FLAG");
 
         vm.record();
         _oracle.priceCache(aToken0, aToken1);
