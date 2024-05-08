@@ -478,12 +478,12 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // act
         vm.expectEmit(false, false, false, true);
+        emit Route(lIntermediate2, lEnd, lIntermediateRoute3);
+        vm.expectEmit(false, false, false, true);
         emit Route(lStart, lIntermediate1, lIntermediateRoute1);
         vm.expectEmit(true, true, true, true);
         // note the reverse seq here as well
         emit Route(lIntermediate2, lIntermediate1, lIntermediateRoute2);
-        vm.expectEmit(false, false, false, true);
-        emit Route(lIntermediate2, lEnd, lIntermediateRoute3);
         vm.expectEmit(false, false, false, true);
         emit Route(lStart, lEnd, lRoute);
         _oracle.setRoute(lStart, lEnd, lRoute);
@@ -531,8 +531,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(lQueriedRoute, lRoute);
         bytes32 lSlot1 = address(_tokenA).calculateSlot(address(_tokenD));
         bytes32 lSlot2 = bytes32(uint256(lSlot1) + 1);
-        bytes32 lSlot3 = bytes32(uint256(lSlot2) + 1);
-        bytes32 lData = vm.load(address(_oracle), lSlot3);
+        bytes32 lData = vm.load(address(_oracle), lSlot2);
         assertNotEq(lData, 0);
 
         // act
@@ -559,8 +558,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         lData = vm.load(address(_oracle), lSlot1);
         assertEq(lData, 0);
         lData = vm.load(address(_oracle), lSlot2);
-        assertEq(lData, 0);
-        lData = vm.load(address(_oracle), lSlot3);
         assertEq(lData, 0);
     }
 
@@ -831,23 +828,5 @@ contract ReservoirPriceOracleTest is BaseTest {
         // act & assert
         vm.expectRevert(IPriceOracle.PO_NoPath.selector);
         _oracle.getQuote(123, address(123), address(456));
-    }
-
-    function testXX() external {
-        //        bytes32 FLAG_SIMPLE_PRICE = bytes32(uint256(0x3));
-        //
-        //        console2.logBytes32(FLAG_SIMPLE_PRICE << 254);
-
-        int256 x = -5;
-
-        console2.logBytes32(bytes32(uint256(~x + 1)));
-
-        console2.logInt((x & 0x8000000));
-
-        console2.log(type(int256).min);
-        console2.log(type(int256).max);
-        console2.logBytes32(hex"0010");
-
-        uint256 a = 5;
     }
 }

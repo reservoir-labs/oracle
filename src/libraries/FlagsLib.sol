@@ -1,14 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
-
-type Flag is bytes1;
-//type Data is bytes32;
-
 library FlagsLib {
-    using Bytes32Lib for *;
-
     error DECIMAL_DIFF_OUT_OF_RANGE();
 
     bytes32 public constant FLAG_UNINITIALIZED = bytes32(uint256(0x0));
@@ -18,6 +11,10 @@ library FlagsLib {
 
     function getRouteFlag(bytes32 aData) internal pure returns (bytes32) {
         return aData >> 248;
+    }
+
+    function getSecondRouteFlag(bytes32 aData) internal pure returns (bytes32) {
+        return aData >> 80 & 0x00000000000000000000000000000000000000000000000000000000000000ff;
     }
 
     function isSimplePrice(bytes32 aData) internal pure returns (bool) {
@@ -38,6 +35,23 @@ library FlagsLib {
     }
 
     function getPrice(bytes32 aData) internal pure returns (uint256 rPrice) {
-        rPrice = (aData & 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff).toUint256();
+        rPrice = uint256(aData & 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
+    }
+
+    function getTokenFirstWord(bytes32 aData) internal pure returns (address rToken) {
+        rToken =
+            address(uint160(uint256(aData & 0x00ffffffffffffffffffffffffffffffffffffffff0000000000000000000000) >> 88));
+    }
+
+    function getThirdToken(bytes32 aFirstWord, bytes32 aSecondWord) internal pure returns (address rToken) {
+        bytes32 lFirst10Bytes = (aFirstWord & 0x00000000000000000000000000000000000000000000ffffffffffffffffffff) << 80;
+        bytes32 lLast10Bytes = aSecondWord >> 176;
+        rToken = address(uint160(uint256(lFirst10Bytes | lLast10Bytes)));
+    }
+
+    function getFourthToken(bytes32 aSecondWord) internal pure returns (address rToken) {
+        rToken = address(
+            uint160(uint256(aSecondWord & 0x0000000000000000000000ffffffffffffffffffffffffffffffffffffffff00) >> 8)
+        );
     }
 }

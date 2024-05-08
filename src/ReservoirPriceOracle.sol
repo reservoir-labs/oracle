@@ -300,40 +300,40 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         address[] memory lResults = new address[](MAX_ROUTE_LENGTH);
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
-        bytes32 lData;
+        bytes32 lFirstWord;
         uint256 lRouteLength;
         assembly {
-            lData := sload(lSlot)
+            lFirstWord := sload(lSlot)
         }
-        bytes32 lFlag = lData.getRouteFlag(); // we read the uppermost 2 bits8 of the word
+        bytes32 lFlag = lFirstWord.getRouteFlag();
 
         // simple route
         if (lFlag == FlagsLib.FLAG_SIMPLE_PRICE) {
             lResults[0] = aToken0;
             lResults[1] = aToken1;
             lRouteLength = 2;
-            rDecimalDiff = lData.getDecimalDifference();
-            rPrice = lData.getPrice();
+            rDecimalDiff = lFirstWord.getDecimalDifference();
+            rPrice = lFirstWord.getPrice();
         }
         // composite route
         else if (lFlag == FlagsLib.FLAG_COMPOSITE_NEXT) {
-            address[] memory lIntermediatePrices = new address[](MAX_ROUTE_LENGTH - 1);
-            address lToken = address(uint160(uint256(lData)));
-            lResults[0] = aToken0;
-            lResults[1] = lToken;
-            lRouteLength = 2;
-            while (true) {
-                assembly {
-                    lData := sload(add(lSlot, sub(lRouteLength, 1)))
-                }
-                lToken = address(uint160(uint256(lData)));
-                lResults[lRouteLength] = lToken;
-                lRouteLength += 1;
-
-                lFlag = lData.getRouteFlag();
-                if (lFlag == FlagsLib.FLAG_COMPOSITE_END) break;
-                else assert(lFlag == FlagsLib.FLAG_COMPOSITE_NEXT);
+            bytes32 lSecondWord;
+            assembly {
+                lSecondWord := sload(add(lSlot, 1))
             }
+            address lSecondToken = lFirstWord.getTokenFirstWord();
+            address lThirdToken = lFirstWord.getThirdToken(lSecondWord);
+            lResults[0] = aToken0;
+            lResults[1] = lSecondToken;
+            lResults[2] = lThirdToken;
+            lRouteLength = 3;
+
+            lFlag = lFirstWord.getSecondRouteFlag();
+            if (lFlag == FlagsLib.FLAG_COMPOSITE_NEXT) {
+                address lFourthToken = lSecondWord.getFourthToken();
+                lResults[3] = lFourthToken;
+                lRouteLength += 1;
+            } else if (lFlag == FlagsLib.FLAG_COMPOSITE_END) { }
         }
         // no route
         else if (lFlag == FlagsLib.FLAG_UNINITIALIZED) { }
@@ -528,7 +528,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 lSecondWord = lThirdTokenSecond10Bytes;
             } else if (lRouteLength == 4) {
                 // Set flag before third token to FLAG_COMPOSITE_NEXT as there are 4 tokens in total
-                lFirstWord = lFirstWord | lSecondTokenData | FlagsLib.FLAG_COMPOSITE_NEXT << 80 | lThirdTokenFirst10Bytes;
+                lFirstWord =
+                    lFirstWord | lSecondTokenData | FlagsLib.FLAG_COMPOSITE_NEXT << 80 | lThirdTokenFirst10Bytes;
 
                 bytes32 lFourthTokenData = bytes32(bytes20(aToken1)) >> 88;
                 lSecondWord = lThirdTokenSecond10Bytes | FlagsLib.FLAG_COMPOSITE_END << 168 | lFourthTokenData;
