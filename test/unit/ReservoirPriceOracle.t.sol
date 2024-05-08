@@ -30,7 +30,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     // writes the cached prices, for easy testing
     function _writePriceCache(address aToken0, address aToken1, uint256 aPrice) internal {
         require(aToken0 < aToken1, "tokens unsorted");
-        require(bytes32(aPrice) & bytes1(0xff) == 0, "PRICE WILL OVERLAP FLAG");
+        require(bytes32(aPrice) & bytes2(0xffff) == 0, "PRICE WILL OVERLAP FLAG");
 
         vm.record();
         _oracle.priceCache(aToken0, aToken1);
