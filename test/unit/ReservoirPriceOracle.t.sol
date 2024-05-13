@@ -127,7 +127,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         );
     }
 
-    function testGetQuote_MultipleHops() external {
+    function testGetQuote_MultipleHops() public {
         // assume
         uint256 lPriceAB = 1e18;
         uint256 lPriceBC = 2e18;
@@ -828,5 +828,21 @@ contract ReservoirPriceOracleTest is BaseTest {
         // act & assert
         vm.expectRevert(IPriceOracle.PO_NoPath.selector);
         _oracle.getQuote(123, address(123), address(456));
+    }
+
+    function testGetQuote_PriceZero() external {
+        // act & assert
+        vm.expectRevert(ReservoirPriceOracle.RPC_PRICE_ZER0.selector);
+        _oracle.getQuote(32111, address(_tokenA), address(_tokenB));
+    }
+
+    function testGetQuote_MultipleHops_PriceZero() external {
+        // arrange
+        testGetQuote_MultipleHops();
+        _writePriceCache(address(_tokenB), address(_tokenC), 0);
+
+        // act & assert
+        vm.expectRevert(ReservoirPriceOracle.RPC_PRICE_ZER0.selector);
+        _oracle.getQuote(321321, address(_tokenA), address(_tokenD));
     }
 }

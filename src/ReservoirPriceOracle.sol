@@ -57,6 +57,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     error RPC_INVALID_ROUTE();
     error RPC_WRITE_TO_NON_SIMPLE_ROUTE();
     error RPC_UNSUPPORTED_TOKEN_DECIMALS();
+    error RPC_PRICE_ZER0();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
@@ -422,6 +423,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             }
         }
 
+        if (lPrice == 0) revert RPC_PRICE_ZER0();
         lPrice = lToken0 == aBase ? lPrice : lPrice.invertWad();
         lDecimalDiff = lToken0 == aBase ? lDecimalDiff : -lDecimalDiff;
 
