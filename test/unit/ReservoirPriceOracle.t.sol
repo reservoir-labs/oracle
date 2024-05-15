@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import { BaseTest, console2, ReservoirPair } from "test/__fixtures/BaseTest.t.sol";
+import { BaseTest, console2, ReservoirPair, MintableERC20 } from "test/__fixtures/BaseTest.t.sol";
 
 import { Utils } from "src/libraries/Utils.sol";
 import {
@@ -180,6 +180,49 @@ contract ReservoirPriceOracleTest is BaseTest {
         // assert
         assertEq(lAmountOut, 98.625e6);
     }
+
+    function testGetQuote_RandomEverything_1HopRoute(
+        uint256 aPrice,
+        uint256 aAmtIn,
+        address aTokenAAddress,
+        address aTokenBAddress,
+        uint8 aToken0Decimal,
+        uint8 aToken1Decimal
+    ) external {
+        // assume
+        vm.assume(
+            aTokenAAddress > address(0x1000) && aTokenBAddress > address(0x1000) && aTokenAAddress != aTokenBAddress
+        ); // avoid EVM precompile addresses
+        uint256 lPrice = bound(aPrice, 1, 1e36);
+        uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
+        uint256 lTokenADecimal = bound(aToken0Decimal, 0, 18);
+        uint256 lTokenBDecimal = bound(aToken1Decimal, 0, 18);
+
+        // arrange
+        MintableERC20 lTokenA = MintableERC20(aTokenAAddress);
+        MintableERC20 lTokenB = MintableERC20(aTokenBAddress);
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenADecimal)), address(lTokenA));
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenBDecimal)), address(lTokenB));
+
+        ReservoirPair lPair = ReservoirPair(_factory.createPair(IERC20(address(lTokenA)), IERC20(address(lTokenB)), 0));
+        _oracle.designatePair(address(lTokenA), address(lTokenB), lPair);
+
+        address[] memory lRoute = new address[](2);
+        (lRoute[0], lRoute[1]) =
+            lTokenA < lTokenB ? (address(lTokenA), address(lTokenB)) : (address(lTokenB), address(lTokenA));
+        _oracle.setRoute(lRoute[0], lRoute[1], lRoute);
+        _writePriceCache(lRoute[0], lRoute[1], lPrice); // price written could be tokenB/tokenA or tokenA/tokenB depending on the fuzz addresses
+
+        // act
+        uint256 lAmtBOut = _oracle.getQuote(lAmtIn * 10 ** lTokenADecimal, address(lTokenA), address(lTokenB));
+
+        // assert
+        assertEq(lAmtBOut, lAmtIn * (lTokenA < lTokenB ? lPrice : lPrice.invertWad()) * 10 ** lTokenBDecimal / 1e18);
+    }
+
+    function testGetQuote_RandomEverything_2HopRoute() external { }
+
+    function testGetQuote_RandomEverything_3HopRoute() external { }
 
     function testGetQuotes(uint256 aPrice, uint256 aAmountIn) external {
         // assume
@@ -833,7 +876,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testGetQuote_PriceZero() external {
         // act & assert
         vm.expectRevert(ReservoirPriceOracle.RPC_PRICE_ZER0.selector);
-        _oracle.getQuote(32111, address(_tokenA), address(_tokenB));
+        _oracle.getQuote(32_111, address(_tokenA), address(_tokenB));
     }
 
     function testGetQuote_MultipleHops_PriceZero() external {
@@ -843,6 +886,14 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // act & assert
         vm.expectRevert(ReservoirPriceOracle.RPC_PRICE_ZER0.selector);
-        _oracle.getQuote(321321, address(_tokenA), address(_tokenD));
+        _oracle.getQuote(321_321, address(_tokenA), address(_tokenD));
+    }
+
+    function testAA() external {
+        address xx = address(0x1230000000000000000000000000000000000aBC);
+
+        bytes32 yy = bytes32(bytes20(xx)) << 80;
+
+        console2.logBytes32(yy);
     }
 }
