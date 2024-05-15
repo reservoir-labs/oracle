@@ -147,8 +147,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// for priceCache[aTokenA][aTokenB] but instead the prices of its constituent simple routes will be written.
     /// @param aTokenA Address of one of the tokens for the price update. Does not have to be less than address of aTokenB
     /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
-    /// @param aRewardRecipient The beneficiary of the reward. Must implement the receive function if is a smart
-    /// contract address. Set to address(0) if not seeking a reward
+    /// @param aRewardRecipient The beneficiary of the reward. Must be able to receive ether. Set to address(0) if not seeking a reward
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) public nonReentrant {
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
