@@ -41,6 +41,8 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         int256 lDecimalDiff = int256(uint256(IERC20(aToken1).decimals())) - int256(uint256(IERC20(aToken0).decimals()));
         bytes32 lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDecimalDiff) | bytes32(aPrice);
+        require(lData.getDecimalDifference() == lDecimalDiff, "decimal diff incorrect");
+        require(lData.getRouteFlag() == FlagsLib.FLAG_SIMPLE_PRICE, "flag incorrect");
         vm.store(address(_oracle), lAccesses[0], lData);
     }
 
@@ -181,6 +183,43 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // assert
         assertEq(lAmountOut, 98.625e6);
+    }
+
+    function testGetQuote_ComplicatedDecimals() external {
+        // arrange
+        MintableERC20 lTokenA = MintableERC20(address(0x1111));
+        MintableERC20 lTokenB = MintableERC20(address(0x3333));
+        MintableERC20 lTokenC = MintableERC20(address(0x2222));
+        uint8 lTokenADecimals = 6;
+        uint8 lTokenBDecimals = 8;
+        uint8 lTokenCDecimals = 11;
+
+
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", lTokenADecimals), address(lTokenA));
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", lTokenBDecimals), address(lTokenB));
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", lTokenCDecimals), address(lTokenC));
+
+        ReservoirPair lPairAB = ReservoirPair(_factory.createPair(IERC20(address(lTokenA)), IERC20(address(lTokenB)), 0));
+        ReservoirPair lPairBC = ReservoirPair(_factory.createPair(IERC20(address(lTokenB)), IERC20(address(lTokenC)), 0));
+        _oracle.designatePair(address(lTokenA), address(lTokenB), lPairAB);
+        _oracle.designatePair(address(lTokenB), address(lTokenC), lPairBC);
+
+        address[] memory lRoute = new address[](3);
+        lRoute[0] = address(lTokenA);
+        lRoute[1] = address(lTokenB);
+        lRoute[2] = address(lTokenC);
+
+        _oracle.setRoute(address(lTokenA), address(lTokenC), lRoute);
+        _writePriceCache(address(lTokenA), address(lTokenB), 1e18);
+        _writePriceCache(address(lTokenC), address(lTokenB), 1e18);
+
+        // act
+        uint256 lAmtCOut = _oracle.getQuote(10 ** lTokenADecimals, address(lTokenA), address(lTokenC));
+        uint256 lAmtAOut = _oracle.getQuote(10 ** lTokenCDecimals, address(lTokenC), address(lTokenA));
+
+        // assert
+        assertEq(lAmtCOut, 10 ** lTokenCDecimals);
+        assertEq(lAmtAOut, 10 ** lTokenADecimals);
     }
 
     function testGetQuote_RandomizeAllParam_1HopRoute(
