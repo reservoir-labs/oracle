@@ -407,7 +407,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (lRoute.length == 0) {
             revert PO_NoPath();
         }
-        // if composite route, read simple prices to derive composite price
+        // for composite route, read simple prices to derive composite price
         else if (lRoute.length > 2) {
             lPrice = WAD;
             for (uint256 i = 0; i < lRoute.length - 1; ++i) {
@@ -417,7 +417,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
                 // therefore we do not check `_route` again to ensure that there is indeed a route
                 (uint256 lRoutePrice, int256 lRouteDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
-                lDecimalDiff += lRouteDecimalDiff;
+                lDecimalDiff += lRouteDecimalDiff; // will not over/underflow given that each value is between -18 and +18 and that the final value will also be within this range
                 lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
             }
         }
