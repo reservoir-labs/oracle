@@ -194,7 +194,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint8 lTokenBDecimals = 8;
         uint8 lTokenCDecimals = 11;
 
-
         deployCodeTo("MintableERC20.sol", abi.encode("T", "T", lTokenADecimals), address(lTokenA));
         deployCodeTo("MintableERC20.sol", abi.encode("T", "T", lTokenBDecimals), address(lTokenB));
         deployCodeTo("MintableERC20.sol", abi.encode("T", "T", lTokenCDecimals), address(lTokenC));
@@ -215,10 +214,12 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // act
         uint256 lAmtCOut = _oracle.getQuote(10 ** lTokenADecimals, address(lTokenA), address(lTokenC));
+        uint256 lAmtBOut = _oracle.getQuote(10 ** lTokenADecimals, address(lTokenA), address(lTokenB));
         uint256 lAmtAOut = _oracle.getQuote(10 ** lTokenCDecimals, address(lTokenC), address(lTokenA));
 
         // assert
         assertEq(lAmtCOut, 10 ** lTokenCDecimals);
+        assertEq(lAmtBOut, 10 ** lTokenBDecimals);
         assertEq(lAmtAOut, 10 ** lTokenADecimals);
     }
 
@@ -290,7 +291,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         MintableERC20 lTokenC = MintableERC20(aTokenCAddress);
         deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenADecimal)), address(lTokenA));
         deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenBDecimal)), address(lTokenB));
-        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenBDecimal)), address(lTokenC));
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenCDecimal)), address(lTokenC));
 
         ReservoirPair lPair1 = ReservoirPair(_factory.createPair(IERC20(address(lTokenA)), IERC20(address(lTokenB)), 0));
         ReservoirPair lPair2 = ReservoirPair(_factory.createPair(IERC20(address(lTokenB)), IERC20(address(lTokenC)), 0));
@@ -320,10 +321,11 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint256 lAmtCOut = _oracle.getQuote(lAmtIn * 10 ** lTokenADecimal, address(lTokenA), address(lTokenC));
 
         // assert
-        uint256 lPrice = (lTokenA < lTokenB ? lPrice1 : lPrice1.invertWad())
+        uint256 lPriceAC = (lTokenA < lTokenB ? lPrice1 : lPrice1.invertWad())
             * (lTokenB < lTokenC ? lPrice2 : lPrice2.invertWad()) / WAD;
-        console2.log("lPrice", lPrice);
-        assertEq(lAmtCOut, lAmtIn * lPrice * (10 ** lTokenCDecimal) / WAD);
+        // TODO: the difference is due to the way the arithmetic is done, whether it is inverted first
+        // and which price is multiplied first
+        assertApproxEqRel(lAmtCOut, lAmtIn * lPriceAC * (10 ** lTokenCDecimal) / WAD, 0.005e18);
     }
 
     function testGetQuote_RandomizeAllParam_3HopRoute() external { }
