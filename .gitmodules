@@ -4,3 +4,6 @@
 [submodule "lib/amm-core"]
 	path = lib/amm-core
 	url = https://github.com/reservoir-labs/amm-core
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/Vectorized/solady
