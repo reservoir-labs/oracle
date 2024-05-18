@@ -16,11 +16,13 @@ import {
     FlagsLib
 } from "src/ReservoirPriceOracle.sol";
 import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
+import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
     using FlagsLib for bytes32;
     using Bytes32Lib for *;
+    using EnumerableSetLib for EnumerableSetLib.AddressSet;
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event Oracle(address newOracle);
@@ -28,6 +30,9 @@ contract ReservoirPriceOracleTest is BaseTest {
     event Route(address token0, address token1, address[] route);
 
     uint256 private constant WAD = 1e18;
+
+    // to keep track of addresses to ensure no clash for fuzz tests
+    EnumerableSetLib.AddressSet internal _addressSet;
 
     // writes the cached prices, for easy testing
     function _writePriceCache(address aToken0, address aToken1, uint256 aPrice) internal {
@@ -52,6 +57,11 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // make sure ether balance of test contract is 0
         deal(address(this), 0);
+
+        _addressSet.add(_tokenA);
+        _addressSet.add(_tokenB);
+        _addressSet.add(_tokenC);
+        _addressSet.add(_tokenD);
     }
 
     receive() external payable { } // required to receive reward payout from priceCache
@@ -198,8 +208,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         deployCodeTo("MintableERC20.sol", abi.encode("T", "T", lTokenBDecimals), address(lTokenB));
         deployCodeTo("MintableERC20.sol", abi.encode("T", "T", lTokenCDecimals), address(lTokenC));
 
-        ReservoirPair lPairAB = ReservoirPair(_factory.createPair(IERC20(address(lTokenA)), IERC20(address(lTokenB)), 0));
-        ReservoirPair lPairBC = ReservoirPair(_factory.createPair(IERC20(address(lTokenB)), IERC20(address(lTokenC)), 0));
+        ReservoirPair lPairAB =
+            ReservoirPair(_factory.createPair(IERC20(address(lTokenA)), IERC20(address(lTokenB)), 0));
+        ReservoirPair lPairBC =
+            ReservoirPair(_factory.createPair(IERC20(address(lTokenB)), IERC20(address(lTokenC)), 0));
         _oracle.designatePair(address(lTokenA), address(lTokenB), lPairAB);
         _oracle.designatePair(address(lTokenB), address(lTokenC), lPairBC);
 
@@ -232,9 +244,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint8 aTokenBDecimal
     ) external {
         // assume
-        vm.assume(
-            aTokenAAddress > address(0x1000) && aTokenBAddress > address(0x1000) && aTokenAAddress != aTokenBAddress
-        ); // avoid EVM precompile addresses
+        vm.assume(_addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress));
         uint256 lPrice = bound(aPrice, 1, 1e36);
         uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
         uint256 lTokenADecimal = bound(aTokenADecimal, 0, 18);
@@ -274,10 +284,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint8 aTokenCDecimal
     ) external {
         // assume
-        vm.assume(
-            aTokenAAddress > address(0x1000) && aTokenBAddress > address(0x1000) && aTokenCAddress > address(0x1000)
-                && aTokenAAddress != aTokenBAddress && aTokenBAddress != aTokenCAddress && aTokenAAddress != aTokenCAddress
-        );
+        vm.assume(_addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress) && _addressSet.add(aTokenCAddress));
         uint256 lPrice1 = bound(aPrice1, 1e9, 1e25); // need to bound price within this range as a price below this will go to zero as during the mul and div of prices
         uint256 lPrice2 = bound(aPrice2, 1e9, 1e25);
         uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
@@ -328,7 +335,85 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertApproxEqRel(lAmtCOut, lAmtIn * lPriceAC * (10 ** lTokenCDecimal) / WAD, 0.005e18);
     }
 
-    function testGetQuote_RandomizeAllParam_3HopRoute() external { }
+    function testGetQuote_RandomizeAllParam_3HopRoute(
+        uint256 aPrice1,
+        uint256 aPrice2,
+        uint256 aPrice3,
+        uint256 aAmtIn,
+        address aTokenAAddress,
+        address aTokenBAddress,
+        address aTokenCAddress,
+        address aTokenDAddress,
+        uint8 aTokenADecimal,
+        uint8 aTokenBDecimal,
+        uint8 aTokenCDecimal,
+        uint8 aTokenDDecimal
+    ) external {
+        // assume
+        vm.assume(
+            _addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress) && _addressSet.add(aTokenCAddress)
+                && _addressSet.add(aTokenDAddress)
+        );
+        uint256 lPrice1 = bound(aPrice1, 1e12, 1e25); // need to bound price within this range as a price below this will go to zero as during the mul and div of prices
+        uint256 lPrice2 = bound(aPrice2, 1e12, 1e25);
+        uint256 lPrice3 = bound(aPrice3, 1e12, 1e25);
+        uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
+        uint256 lTokenADecimal = bound(aTokenADecimal, 0, 18);
+        uint256 lTokenBDecimal = bound(aTokenBDecimal, 0, 18);
+        uint256 lTokenCDecimal = bound(aTokenCDecimal, 0, 18);
+        uint256 lTokenDDecimal = bound(aTokenDDecimal, 0, 18);
+
+        // arrange
+        MintableERC20 lTokenA = MintableERC20(aTokenAAddress);
+        MintableERC20 lTokenB = MintableERC20(aTokenBAddress);
+        MintableERC20 lTokenC = MintableERC20(aTokenCAddress);
+        MintableERC20 lTokenD = MintableERC20(aTokenDAddress);
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenADecimal)), address(lTokenA));
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenBDecimal)), address(lTokenB));
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenCDecimal)), address(lTokenC));
+        deployCodeTo("MintableERC20.sol", abi.encode("T", "T", uint8(lTokenDDecimal)), address(lTokenD));
+
+        ReservoirPair lPair1 = ReservoirPair(_factory.createPair(IERC20(address(lTokenA)), IERC20(address(lTokenB)), 0));
+        ReservoirPair lPair2 = ReservoirPair(_factory.createPair(IERC20(address(lTokenB)), IERC20(address(lTokenC)), 0));
+        ReservoirPair lPair3 = ReservoirPair(_factory.createPair(IERC20(address(lTokenC)), IERC20(address(lTokenD)), 0));
+
+        _oracle.designatePair(address(lTokenA), address(lTokenB), lPair1);
+        _oracle.designatePair(address(lTokenB), address(lTokenC), lPair2);
+        _oracle.designatePair(address(lTokenC), address(lTokenD), lPair3);
+
+        // to avoid stack too deep error
+        {
+            address[] memory lRoute = new address[](4);
+            (lRoute[0], lRoute[3]) =
+                lTokenA < lTokenD ? (address(lTokenA), address(lTokenD)) : (address(lTokenD), address(lTokenA));
+            lRoute[1] = address(lTokenB);
+            lRoute[2] = address(lTokenC);
+
+            _oracle.setRoute(lRoute[0], lRoute[3], lRoute);
+            _writePriceCache(
+                lRoute[0] < lRoute[1] ? lRoute[0] : lRoute[1], lRoute[0] < lRoute[1] ? lRoute[1] : lRoute[0], lPrice1
+            );
+            _writePriceCache(
+                address(lTokenB) < address(lTokenC) ? address(lTokenB) : address(lTokenC),
+                address(lTokenB) < address(lTokenC) ? address(lTokenC) : address(lTokenB),
+                lPrice2
+            );
+            _writePriceCache(
+                lRoute[2] < lRoute[3] ? lRoute[2] : lRoute[3], lRoute[2] < lRoute[3] ? lRoute[3] : lRoute[2], lPrice3
+            );
+        }
+
+        // act
+        uint256 lAmtDOut = _oracle.getQuote(lAmtIn * 10 ** lTokenADecimal, address(lTokenA), address(lTokenD));
+
+        // assert
+        uint256 lPriceAD = (lTokenA < lTokenB ? lPrice1 : lPrice1.invertWad())
+            * (lTokenB < lTokenC ? lPrice2 : lPrice2.invertWad()) / WAD
+            * (lTokenC < lTokenD ? lPrice3 : lPrice3.invertWad()) / WAD;
+        // TODO: the difference is due to the way the arithmetic is done, whether it is inverted first
+        // and which price is multiplied first
+        assertApproxEqRel(lAmtDOut, lAmtIn * lPriceAD * (10 ** lTokenDDecimal) / WAD, 0.005e18);
+    }
 
     function testGetQuotes(uint256 aPrice, uint256 aAmountIn) external {
         // assume
@@ -994,10 +1079,33 @@ contract ReservoirPriceOracleTest is BaseTest {
     }
 
     function testAA() external {
-        address xx = address(0x1230000000000000000000000000000000000aBC);
+        uint256 x = 536_887_912_645_770_985_932_281_367;
+        uint256 y = 1_862_586_168_260_007_116_231_935_372;
+        console2.log(x.invertWad());
+        console2.log(y.invertWad());
+    }
 
-        bytes32 yy = bytes32(bytes20(xx)) << 80;
+    function testCalc(uint256 aPrice) external {
+        uint256 lPrice1 = bound(aPrice, 1e9, 1e25);
+        uint256 lPrice2 = bound(aPrice, 1e9, 1e25);
 
-        console2.logBytes32(yy);
+        assertEq(WAD * lPrice1 / WAD * lPrice2 / WAD, lPrice1 * lPrice2 / WAD);
+    }
+
+    function testCalc2() external {
+        uint256 price1 = 1_000_000_000;
+        uint256 price2 = 1_000_000_001;
+
+        console2.log(price1 * price2 / WAD);
+        console2.log((price1 * price2 / WAD).invertWad());
+        console2.log(price1 * price2.invertWad() / WAD);
+    }
+
+    uint256[] public fixtureSome = [1, 2, 4_293_847_219_283_749_823];
+
+    function testFixx(uint256 some) external {
+        console2.log(some);
+
+        if (some == 429_384_721_928_374_982_312_312) assert(false);
     }
 }

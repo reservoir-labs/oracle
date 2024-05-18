@@ -417,7 +417,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
                 // therefore we do not check `_route` again to ensure that there is indeed a route
                 (uint256 lRoutePrice, int256 lRouteDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
-                lDecimalDiff += (lLowerToken == lRoute[i]) ?  lRouteDecimalDiff : -lRouteDecimalDiff; // will not over/underflow given that each value is between -18 and +18 and that the final value will also be within this range
+                lDecimalDiff += (lLowerToken == lRoute[i]) ? lRouteDecimalDiff : -lRouteDecimalDiff; // will not over/underflow given that each value is between -18 and +18 and that the final value will also be within this range
                 lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
             }
         }
