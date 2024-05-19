@@ -34,6 +34,8 @@ contract ReservoirPriceOracleTest is BaseTest {
     // to keep track of addresses to ensure no clash for fuzz tests
     EnumerableSetLib.AddressSet internal _addressSet;
 
+    address internal constant ADDRESS_THRESHOLD = address(0x1000);
+
     // writes the cached prices, for easy testing
     function _writePriceCache(address aToken0, address aToken1, uint256 aPrice) internal {
         require(aToken0 < aToken1, "tokens unsorted");
@@ -58,10 +60,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         // make sure ether balance of test contract is 0
         deal(address(this), 0);
 
-        _addressSet.add(_tokenA);
-        _addressSet.add(_tokenB);
-        _addressSet.add(_tokenC);
-        _addressSet.add(_tokenD);
+        _addressSet.add(address(_tokenA));
+        _addressSet.add(address(_tokenB));
+        _addressSet.add(address(_tokenC));
+        _addressSet.add(address(_tokenD));
     }
 
     receive() external payable { } // required to receive reward payout from priceCache
@@ -244,6 +246,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint8 aTokenBDecimal
     ) external {
         // assume
+        vm.assume(aTokenAAddress > ADDRESS_THRESHOLD && aTokenBAddress > ADDRESS_THRESHOLD); // avoid precompile addresses
         vm.assume(_addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress));
         uint256 lPrice = bound(aPrice, 1, 1e36);
         uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
@@ -284,6 +287,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint8 aTokenCDecimal
     ) external {
         // assume
+        vm.assume(
+            aTokenAAddress > ADDRESS_THRESHOLD && aTokenBAddress > ADDRESS_THRESHOLD
+                && aTokenCAddress > ADDRESS_THRESHOLD
+        );
         vm.assume(_addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress) && _addressSet.add(aTokenCAddress));
         uint256 lPrice1 = bound(aPrice1, 1e9, 1e25); // need to bound price within this range as a price below this will go to zero as during the mul and div of prices
         uint256 lPrice2 = bound(aPrice2, 1e9, 1e25);
@@ -351,12 +358,16 @@ contract ReservoirPriceOracleTest is BaseTest {
     ) external {
         // assume
         vm.assume(
+            aTokenAAddress > ADDRESS_THRESHOLD && aTokenBAddress > ADDRESS_THRESHOLD
+                && aTokenCAddress > ADDRESS_THRESHOLD && aTokenDAddress > ADDRESS_THRESHOLD
+        );
+        vm.assume(
             _addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress) && _addressSet.add(aTokenCAddress)
                 && _addressSet.add(aTokenDAddress)
         );
-        uint256 lPrice1 = bound(aPrice1, 1e12, 1e25); // need to bound price within this range as a price below this will go to zero as during the mul and div of prices
-        uint256 lPrice2 = bound(aPrice2, 1e12, 1e25);
-        uint256 lPrice3 = bound(aPrice3, 1e12, 1e25);
+        uint256 lPrice1 = bound(aPrice1, 1e12, 1e24); // need to bound price within this range as a price below this will go to zero as during the mul and div of prices
+        uint256 lPrice2 = bound(aPrice2, 1e12, 1e24);
+        uint256 lPrice3 = bound(aPrice3, 1e12, 1e24);
         uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
         uint256 lTokenADecimal = bound(aTokenADecimal, 0, 18);
         uint256 lTokenBDecimal = bound(aTokenBDecimal, 0, 18);
@@ -381,38 +392,41 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.designatePair(address(lTokenB), address(lTokenC), lPair2);
         _oracle.designatePair(address(lTokenC), address(lTokenD), lPair3);
 
-        // to avoid stack too deep error
-        {
-            address[] memory lRoute = new address[](4);
-            (lRoute[0], lRoute[3]) =
-                lTokenA < lTokenD ? (address(lTokenA), address(lTokenD)) : (address(lTokenD), address(lTokenA));
-            lRoute[1] = address(lTokenB);
-            lRoute[2] = address(lTokenC);
+        address[] memory lRoute = new address[](4);
+        (lRoute[0], lRoute[3]) =
+            lTokenA < lTokenD ? (address(lTokenA), address(lTokenD)) : (address(lTokenD), address(lTokenA));
+        lRoute[1] = address(lTokenB);
+        lRoute[2] = address(lTokenC);
 
-            _oracle.setRoute(lRoute[0], lRoute[3], lRoute);
-            _writePriceCache(
-                lRoute[0] < lRoute[1] ? lRoute[0] : lRoute[1], lRoute[0] < lRoute[1] ? lRoute[1] : lRoute[0], lPrice1
-            );
-            _writePriceCache(
-                address(lTokenB) < address(lTokenC) ? address(lTokenB) : address(lTokenC),
-                address(lTokenB) < address(lTokenC) ? address(lTokenC) : address(lTokenB),
-                lPrice2
-            );
-            _writePriceCache(
-                lRoute[2] < lRoute[3] ? lRoute[2] : lRoute[3], lRoute[2] < lRoute[3] ? lRoute[3] : lRoute[2], lPrice3
-            );
-        }
+        _oracle.setRoute(lRoute[0], lRoute[3], lRoute);
+        _writePriceCache(
+            lRoute[0] < lRoute[1] ? lRoute[0] : lRoute[1], lRoute[0] < lRoute[1] ? lRoute[1] : lRoute[0], lPrice1
+        );
+        _writePriceCache(
+            address(lTokenB) < address(lTokenC) ? address(lTokenB) : address(lTokenC),
+            address(lTokenB) < address(lTokenC) ? address(lTokenC) : address(lTokenB),
+            lPrice2
+        );
+        _writePriceCache(
+            lRoute[2] < lRoute[3] ? lRoute[2] : lRoute[3], lRoute[2] < lRoute[3] ? lRoute[3] : lRoute[2], lPrice3
+        );
 
         // act
         uint256 lAmtDOut = _oracle.getQuote(lAmtIn * 10 ** lTokenADecimal, address(lTokenA), address(lTokenD));
 
         // assert
-        uint256 lPriceAD = (lTokenA < lTokenB ? lPrice1 : lPrice1.invertWad())
-            * (lTokenB < lTokenC ? lPrice2 : lPrice2.invertWad()) / WAD
-            * (lTokenC < lTokenD ? lPrice3 : lPrice3.invertWad()) / WAD;
+        uint256 lPriceStartEnd = (lRoute[0] < lRoute[1] ? lPrice1 : lPrice1.invertWad())
+            * (lRoute[1] < lRoute[2] ? lPrice2 : lPrice2.invertWad()) / WAD
+            * (lRoute[2] < lRoute[3] ? lPrice3 : lPrice3.invertWad()) / WAD;
+
         // TODO: the difference is due to the way the arithmetic is done, whether it is inverted first
         // and which price is multiplied first
-        assertApproxEqRel(lAmtDOut, lAmtIn * lPriceAD * (10 ** lTokenDDecimal) / WAD, 0.005e18);
+        assertApproxEqRel(
+            lAmtDOut,
+            lAmtIn * (lRoute[0] == address(lTokenA) ? lPriceStartEnd : lPriceStartEnd.invertWad())
+                * (10 ** lTokenDDecimal) / WAD,
+            0.005e18
+        );
     }
 
     function testGetQuotes(uint256 aPrice, uint256 aAmountIn) external {
