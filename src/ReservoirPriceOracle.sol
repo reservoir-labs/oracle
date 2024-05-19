@@ -17,9 +17,11 @@ import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
+import { FlagsLib } from "src/libraries/FlagsLib.sol";
 
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using FixedPointMathLib for uint256;
+    using FlagsLib for bytes32;
     using QueryProcessor for ReservoirPair;
     using Utils for *;
 
@@ -53,6 +55,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     error RPC_TOKENS_UNSORTED();
     error RPC_INVALID_ROUTE_LENGTH();
     error RPC_INVALID_ROUTE();
+    error RPC_WRITE_TO_NON_SIMPLE_ROUTE();
+    error RPC_UNSUPPORTED_TOKEN_DECIMALS();
+    error RPC_PRICE_ZER0();
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
@@ -72,15 +77,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
-
-    /// @notice The latest cached geometric TWAP of token1/token0, where the address of token0 is strictly less than the address of token1
-    /// Stored in the form of a 18 decimal fixed point number.
-    /// Supported price range: 1wei to 1e36, due to the need to support inverting price via `Utils.invertWad`
-    /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
-    mapping(address token0 => mapping(address token1 => uint256 price)) public priceCache;
-
-    /// @notice Defines the route to determine price of token0, where the address of token0 is strictly less than the address of token1
-    mapping(address token0 => mapping(address token1 => address[] path)) private _route;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                CONSTRUCTOR, FALLBACKS                                     //
@@ -131,8 +127,18 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         return address(this).balance;
     }
 
-    function route(address aToken0, address aToken1) external view returns (address[] memory) {
-        return _route[aToken0][aToken1];
+    function route(address aToken0, address aToken1) external view returns (address[] memory rRoute) {
+        (rRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
+    }
+
+    /// @notice The latest cached geometric TWAP of token1/token0, where the address of token0 is strictly less than the address of token1
+    /// Stored in the form of a 18 decimal fixed point number.
+    /// Supported price range: 1wei to 1e36, due to the need to support inverting price via `Utils.invertWad`
+    /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
+    /// Only stores prices of simple routes. Does not store prices of composite routes.
+    /// Returns 0 for prices of composite routes
+    function priceCache(address aToken0, address aToken1) external view returns (uint256 rPrice, int256 rDecimalDiff) {
+        (rPrice, rDecimalDiff) = _priceCache(aToken0, aToken1);
     }
 
     /// @notice Updates the TWAP price for all simple routes between `aTokenA` and `aTokenB`. Will also update intermediate routes if the route defined between
@@ -141,11 +147,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// for priceCache[aTokenA][aTokenB] but instead the prices of its constituent simple routes will be written.
     /// @param aTokenA Address of one of the tokens for the price update. Does not have to be less than address of aTokenB
     /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
-    /// @param aRewardRecipient The beneficiary of the reward. Must implement the receive function if is a smart contract address
-    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
+    /// @param aRewardRecipient The beneficiary of the reward. Must be able to receive ether. Set to address(0) if not seeking a reward
+    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) public nonReentrant {
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
-        address[] memory lRoute = _route[lToken0][lToken1];
+        (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert PO_NoPath();
 
         OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](lRoute.length - 1);
@@ -169,12 +175,17 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lQuote = lQueries[i].quote;
             uint256 lNewPrice = lNewPrices[i];
 
+            // assumed to be simple routes and therefore lPrevPrice should never be zero
+            // consider an optimization here for simple routes: no need to read the price cache again
+            // as it has been returned by _getRouteDecimalDifferencePrice in the beginning of the function
+            (uint256 lPrevPrice,) = _priceCache(lBase, lQuote);
+
             // determine if price has moved beyond the threshold, and pay out reward if so
-            if (_calcPercentageDiff(priceCache[lBase][lQuote], lNewPrice) >= priceDeviationThreshold) {
+            if (_calcPercentageDiff(lPrevPrice, lNewPrice) >= priceDeviationThreshold) {
                 _rewardUpdater(aRewardRecipient);
             }
 
-            priceCache[lBase][lQuote] = lNewPrice;
+            _writePriceCache(lBase, lQuote, lNewPrice);
         }
     }
 
@@ -264,7 +275,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _rewardUpdater(address lRecipient) internal {
+    function _rewardUpdater(address aRecipient) internal {
+        if (aRecipient == address(0)) return;
+
         // N.B. Revisit this whenever deployment on a new chain is needed
         // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()` on ARB because the latter will always return
         // the demand insensitive base fee, while the former can return real higher fees during times of congestion
@@ -272,35 +285,157 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         uint256 lPayoutAmt = block.basefee * rewardGasAmount;
 
         if (lPayoutAmt <= address(this).balance) {
-            payable(lRecipient).transfer(lPayoutAmt);
+            payable(aRecipient).transfer(lPayoutAmt);
         } else { } // do nothing if lPayoutAmt is greater than the balance
+    }
+
+    /// @return rRoute The route to determine the price between aToken0 and aToken1
+    /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise
+    /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise
+    function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
+        internal
+        view
+        returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice)
+    {
+        address[] memory lResults = new address[](MAX_ROUTE_LENGTH);
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+
+        bytes32 lFirstWord;
+        uint256 lRouteLength;
+        assembly {
+            lFirstWord := sload(lSlot)
+        }
+        bytes32 lFlag = lFirstWord.getRouteFlag();
+
+        // simple route
+        if (lFlag == FlagsLib.FLAG_SIMPLE_PRICE) {
+            lResults[0] = aToken0;
+            lResults[1] = aToken1;
+            lRouteLength = 2;
+            rDecimalDiff = lFirstWord.getDecimalDifference();
+            rPrice = lFirstWord.getPrice();
+        }
+        // composite route
+        else if (lFlag == FlagsLib.FLAG_COMPOSITE_NEXT) {
+            bytes32 lSecondWord;
+            assembly {
+                lSecondWord := sload(add(lSlot, 1))
+            }
+            address lSecondToken = lFirstWord.getTokenFirstWord();
+            address lThirdToken = lFirstWord.getThirdToken(lSecondWord);
+            lResults[0] = aToken0;
+            lResults[1] = lSecondToken;
+            lResults[2] = lThirdToken;
+            lRouteLength = 3;
+
+            lFlag = lFirstWord.getSecondRouteFlag();
+            if (lFlag == FlagsLib.FLAG_COMPOSITE_NEXT) {
+                address lFourthToken = lSecondWord.getFourthToken();
+                lResults[3] = lFourthToken;
+                lRouteLength += 1;
+            } else if (lFlag == FlagsLib.FLAG_COMPOSITE_END) { }
+        }
+        // no route
+        else if (lFlag == FlagsLib.FLAG_UNINITIALIZED) { }
+
+        rRoute = new address[](lRouteLength);
+        for (uint256 i = 0; i < lRouteLength; ++i) {
+            rRoute[i] = lResults[i];
+        }
+    }
+
+    /// Calculate the storage slot for this intermediate segment and read it to see if there is an existing
+    /// route. If there isn't an existing route, we write it as well.
+    /// @dev assumed that aToken0 and aToken1 are not necessarily sorted
+    function _checkAndPopulateIntermediateRoute(address aToken0, address aToken1) internal {
+        (address lLowerToken, address lHigherToken) = aToken0.sortTokens(aToken1);
+
+        bytes32 lSlot = lLowerToken.calculateSlot(lHigherToken);
+        bytes32 lData;
+        assembly {
+            lData := sload(lSlot)
+        }
+        if (lData == bytes32(0)) {
+            address[] memory lIntermediateRoute = new address[](2);
+            lIntermediateRoute[0] = lLowerToken;
+            lIntermediateRoute[1] = lHigherToken;
+            setRoute(lLowerToken, lHigherToken, lIntermediateRoute);
+        }
+    }
+
+    // performs an SLOAD to load the simple price
+    function _priceCache(address aToken0, address aToken1)
+        internal
+        view
+        returns (uint256 rPrice, int256 rDecimalDiff)
+    {
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+
+        bytes32 lData;
+        assembly {
+            lData := sload(lSlot)
+        }
+        if (lData.isSimplePrice()) {
+            rPrice = lData.getPrice();
+            rDecimalDiff = lData.getDecimalDifference();
+        }
+    }
+
+    function _writePriceCache(address aToken0, address aToken1, uint256 lNewPrice) internal {
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+
+        bytes32 lData;
+        assembly {
+            lData := sload(lSlot)
+        }
+        if (!lData.isSimplePrice()) revert RPC_WRITE_TO_NON_SIMPLE_ROUTE();
+
+        int256 lDiff = lData.getDecimalDifference();
+
+        lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDiff) | bytes32(lNewPrice);
+        assembly {
+            sstore(lSlot, lData)
+        }
     }
 
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
-        address[] memory lRoute = _route[lToken0][lToken1];
-        if (lRoute.length == 0) revert PO_NoPath();
+        (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
+            _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
-        uint256 lPrice = WAD;
-        for (uint256 i = 0; i < lRoute.length - 1; ++i) {
-            // we need to sort token addresses again since intermediate path addresses are not guaranteed to be sorted
-            (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
+        if (lRoute.length == 0) {
+            revert PO_NoPath();
+        }
+        // for composite route, read simple prices to derive composite price
+        else if (lRoute.length > 2) {
+            lPrice = WAD;
+            for (uint256 i = 0; i < lRoute.length - 1; ++i) {
+                (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
 
-            // it is assumed that subroutes defined here are simple routes and not composite routes
-            // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
-            // therefore we do not check `_route` again to ensure that there is indeed a route
-            uint256 lRoutePrice = priceCache[lLowerToken][lHigherToken];
-            lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
+                // it is assumed that subroutes defined here are simple routes and not composite routes
+                // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
+                // therefore we do not check `_route` again to ensure that there is indeed a route
+                (uint256 lRoutePrice, int256 lRouteDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
+                lDecimalDiff += (lLowerToken == lRoute[i]) ? lRouteDecimalDiff : -lRouteDecimalDiff; // will not over/underflow given that each value is between -18 and +18 and that the final value will also be within this range
+                lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
+            }
         }
 
-        // idea: can build a cache of decimals to save on making external calls?
-        uint256 lBaseDecimals = IERC20(aBase).decimals();
-        uint256 lQuoteDecimals = IERC20(aQuote).decimals();
-
+        if (lPrice == 0) revert RPC_PRICE_ZER0();
         lPrice = lToken0 == aBase ? lPrice : lPrice.invertWad();
+        lDecimalDiff = lToken0 == aBase ? lDecimalDiff : -lDecimalDiff;
+
         // quoteAmountOut = baseAmountIn * wadPrice * quoteDecimalScale / baseDecimalScale / WAD
-        rOut = (aAmount * lPrice).fullMulDiv(10 ** lQuoteDecimals, (10 ** lBaseDecimals) * WAD);
+        if (lDecimalDiff > 0) {
+            rOut = (aAmount * lPrice).fullMulDiv(10 ** uint256(lDecimalDiff), WAD);
+        } else if (lDecimalDiff < 0) {
+            rOut = aAmount.fullMulDiv(lPrice, 10 ** uint256(-lDecimalDiff) * WAD);
+        }
+        // equal decimals
+        else {
+            rOut = aAmount.fullMulDiv(lPrice, WAD);
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -330,7 +465,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     // sets a specific pair to serve as price feed for a certain route
-    // TODO: actually is it necessary to have so many args? Maybe all we need is whitelistPair(ReservoirPair)
     function designatePair(address aToken0, address aToken1, ReservoirPair aPair) external nonReentrant onlyOwner {
         (aToken0, aToken1) = aToken0.sortTokens(aToken1);
         assert(aToken0 == address(aPair.token0()) && aToken1 == address(aPair.token1()));
@@ -350,43 +484,89 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @param aToken0 Address of the lower token
     /// @param aToken1 Address of the higher token
     /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived
-    // should we make this recursive, meaning for a route A-B-C-D
-    // besides defining A-D, A-B, B-C, and C-D, we also define
-    // A-B-C, B-C-D ?
-    function setRoute(address aToken0, address aToken1, address[] calldata aRoute) external onlyOwner {
+    function setRoute(address aToken0, address aToken1, address[] memory aRoute) public onlyOwner {
+        uint256 lRouteLength = aRoute.length;
+
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
-        if (aRoute.length > MAX_ROUTE_LENGTH || aRoute.length < 2) revert RPC_INVALID_ROUTE_LENGTH();
-        if (aRoute[0] != aToken0 || aRoute[aRoute.length - 1] != aToken1) revert RPC_INVALID_ROUTE();
+        if (lRouteLength > MAX_ROUTE_LENGTH || lRouteLength < 2) revert RPC_INVALID_ROUTE_LENGTH();
+        if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert RPC_INVALID_ROUTE();
 
-        _route[aToken0][aToken1] = aRoute;
-        emit Route(aToken0, aToken1, aRoute);
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
-        // iteratively define those subroutes if undefined
-        if (aRoute.length > 2) {
-            for (uint256 i = 0; i < aRoute.length - 1; ++i) {
-                (address lLowerToken, address lHigherToken) = aRoute[i].sortTokens(aRoute[i + 1]);
+        // simple route
+        if (lRouteLength == 2) {
+            uint256 lToken0Decimals = IERC20(aToken0).decimals();
+            uint256 lToken1Decimals = IERC20(aToken1).decimals();
+            if (lToken0Decimals > 18 || lToken1Decimals > 18) revert RPC_UNSUPPORTED_TOKEN_DECIMALS();
 
-                // if route is undefined
-                address[] memory lExisting = _route[lLowerToken][lHigherToken];
-                if (lExisting.length == 0) {
-                    address[] memory lSubroute = new address[](2);
-                    lSubroute[0] = lLowerToken;
-                    lSubroute[1] = lHigherToken;
+            int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-                    _route[lLowerToken][lHigherToken] = lSubroute;
-                    emit Route(lLowerToken, lHigherToken, lSubroute);
-                }
+            bytes32 lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDiff);
+            assembly {
+                // Write data to storage.
+                sstore(lSlot, lData)
             }
         }
-        // should we update prices right after setting the route?
+        // composite route
+        else {
+            address lSecondToken = aRoute[1];
+            address lThirdToken = aRoute[2];
+            // Set the uppermost byte of lFirstWord to FLAG_COMPOSITE_NEXT for intermediate hops
+            bytes32 lFirstWord = FlagsLib.FLAG_COMPOSITE_NEXT << 248;
+            // Move the address to start on the 2nd byte.
+            bytes32 lSecondTokenData = bytes32(bytes20(lSecondToken)) >> 8;
+            bytes32 lThirdTokenFirst10Bytes = bytes32(bytes20(lThirdToken)) >> 176;
+
+            // Trim away the first 10 bytes since we only want the last 10 bytes.
+            bytes32 lThirdTokenSecond10Bytes = bytes32(bytes20(lThirdToken) << 80);
+            bytes32 lSecondWord;
+
+            if (lRouteLength == 3) {
+                // Set flag before third token to FLAG_COMPOSITE_END
+                lFirstWord = lFirstWord | lSecondTokenData | FlagsLib.FLAG_COMPOSITE_END << 80 | lThirdTokenFirst10Bytes;
+
+                lSecondWord = lThirdTokenSecond10Bytes;
+            } else if (lRouteLength == 4) {
+                // Set flag before third token to FLAG_COMPOSITE_NEXT as there are 4 tokens in total
+                lFirstWord =
+                    lFirstWord | lSecondTokenData | FlagsLib.FLAG_COMPOSITE_NEXT << 80 | lThirdTokenFirst10Bytes;
+
+                bytes32 lFourthTokenData = bytes32(bytes20(aToken1)) >> 88;
+                lSecondWord = lThirdTokenSecond10Bytes | FlagsLib.FLAG_COMPOSITE_END << 168 | lFourthTokenData;
+
+                _checkAndPopulateIntermediateRoute(lThirdToken, aToken1);
+            }
+            _checkAndPopulateIntermediateRoute(aToken0, lSecondToken);
+            _checkAndPopulateIntermediateRoute(lSecondToken, lThirdToken);
+
+            // Write the two words of route into storage.
+            assembly {
+                sstore(lSlot, lFirstWord)
+                sstore(add(lSlot, 1), lSecondWord)
+            }
+        }
+        emit Route(aToken0, aToken1, aRoute);
     }
 
     function clearRoute(address aToken0, address aToken1) external onlyOwner {
         if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
         if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
 
-        delete _route[aToken0][aToken1];
+        (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
+
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+
+        // clear all storage slots that the route has written to previously
+        assembly {
+            sstore(lSlot, 0)
+        }
+        // routes with length 3/4 use two words of storage
+        if (lRoute.length > 2) {
+            assembly {
+                sstore(add(lSlot, 1), 0)
+            }
+        }
         emit Route(aToken0, aToken1, new address[](0));
     }
 }
