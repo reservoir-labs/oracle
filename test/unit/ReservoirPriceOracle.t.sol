@@ -418,14 +418,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint256 lPriceStartEnd = (lRoute[0] < lRoute[1] ? lPrice1 : lPrice1.invertWad())
             * (lRoute[1] < lRoute[2] ? lPrice2 : lPrice2.invertWad()) / WAD
             * (lRoute[2] < lRoute[3] ? lPrice3 : lPrice3.invertWad()) / WAD;
-
-        // TODO: the difference is due to the way the arithmetic is done, whether it is inverted first
-        // and which price is multiplied first
-        assertApproxEqRel(
+        assertEq(
             lAmtDOut,
             lAmtIn * (lRoute[0] == address(lTokenA) ? lPriceStartEnd : lPriceStartEnd.invertWad())
-                * (10 ** lTokenDDecimal) / WAD,
-            0.005e18
+                * (10 ** lTokenDDecimal) / WAD
         );
     }
 
