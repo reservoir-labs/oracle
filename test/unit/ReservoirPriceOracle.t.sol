@@ -1087,35 +1087,4 @@ contract ReservoirPriceOracleTest is BaseTest {
         vm.expectRevert(ReservoirPriceOracle.RPC_PRICE_ZER0.selector);
         _oracle.getQuote(321_321, address(_tokenA), address(_tokenD));
     }
-
-    function testAA() external {
-        uint256 x = 536_887_912_645_770_985_932_281_367;
-        uint256 y = 1_862_586_168_260_007_116_231_935_372;
-        console2.log(x.invertWad());
-        console2.log(y.invertWad());
-    }
-
-    function testCalc(uint256 aPrice) external {
-        uint256 lPrice1 = bound(aPrice, 1e9, 1e25);
-        uint256 lPrice2 = bound(aPrice, 1e9, 1e25);
-
-        assertEq(WAD * lPrice1 / WAD * lPrice2 / WAD, lPrice1 * lPrice2 / WAD);
-    }
-
-    function testCalc2() external {
-        uint256 price1 = 1_000_000_000;
-        uint256 price2 = 1_000_000_001;
-
-        console2.log(price1 * price2 / WAD);
-        console2.log((price1 * price2 / WAD).invertWad());
-        console2.log(price1 * price2.invertWad() / WAD);
-    }
-
-    uint256[] public fixtureSome = [1, 2, 4_293_847_219_283_749_823];
-
-    function testFixx(uint256 some) external {
-        console2.log(some);
-
-        if (some == 429_384_721_928_374_982_312_312) assert(false);
-    }
 }
