@@ -8,3 +8,4 @@ error OracleNotInitialized();
 error InvalidSeconds();
 error QueryTooOld();
 error BadSecs();
+error PriceOutOfRange(uint256 aPrice);

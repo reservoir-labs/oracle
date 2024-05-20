@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import { BaseTest, console2, ReservoirPair, MintableERC20 } from "test/__fixtures/BaseTest.t.sol";
 
-import { Utils } from "src/libraries/Utils.sol";
+import { Utils, PriceOutOfRange } from "src/libraries/Utils.sol";
 import {
     Buffer,
     Variable,
@@ -451,9 +451,9 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(lAmountOut, 0);
     }
 
-    function testGetQuote_SameBaseQuote(uint256 aAmtIn, address aToken) external {
+    function testGetQuote_SameBaseQuote(uint256 aAmtIn, address aToken) external view {
         // act
-        uint lAmtOut = _oracle.getQuote(aAmtIn, aToken, aToken);
+        uint256 lAmtOut = _oracle.getQuote(aAmtIn, aToken, aToken);
 
         // assert
         assertEq(lAmtOut, aAmtIn);
@@ -994,6 +994,30 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updateTwapPeriod(lNewPeriod);
         vm.expectRevert(ReservoirPriceOracle.RPC_INVALID_TWAP_PERIOD.selector);
         _oracle.updateTwapPeriod(0);
+    }
+
+    function testUpdatePrice_PriceOutOfRange() external {
+        // arrange
+        ReservoirPair lPair = ReservoirPair(_factory.createPair(IERC20(address(_tokenB)), IERC20(address(_tokenC)), 0));
+        _tokenB.mint(address(lPair), 1);
+        _tokenC.mint(address(lPair), type(uint104).max);
+        lPair.mint(address(this));
+
+        skip(10);
+        lPair.sync();
+        skip(_oracle.twapPeriod() * 2);
+        lPair.sync();
+
+        address[] memory lRoute = new address[](2);
+        lRoute[0] = address(_tokenB);
+        lRoute[1] = address(_tokenC);
+
+        _oracle.designatePair(address(_tokenB), address(_tokenC), lPair);
+        _oracle.setRoute(address(_tokenB), address(_tokenC), lRoute);
+
+        // act & assert
+        vm.expectRevert(abi.encodeWithSelector(PriceOutOfRange.selector, 2028266268535138201503457042228640366328194935292146200000));
+        _oracle.updatePrice(address(_tokenB), address(_tokenC), address(0));
     }
 
     function testSetRoute_SameToken() external {

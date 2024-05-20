@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import { IERC20 } from "forge-std/interfaces/IERC20.sol";
 
-import { NoDesignatedPair } from "src/Errors.sol";
+import { NoDesignatedPair, PriceOutOfRange } from "src/Errors.sol";
 import {
     IReservoirPriceOracle,
     OracleAverageQuery,
@@ -102,7 +102,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     // IPriceOracle
 
-    function name() external view returns (string memory) {
+    function name() external pure returns (string memory) {
         return "RESERVOIR PRICE ORACLE";
     }
 
@@ -175,7 +175,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lQuote = lQueries[i].quote;
             uint256 lNewPrice = lNewPrices[i];
 
-            // assumed to be simple routes and therefore lPrevPrice should never be zero
+            // assumed to be simple routes and therefore lPrevPrice would only be 0 for the first update
             // consider an optimization here for simple routes: no need to read the price cache again
             // as it has been returned by _getRouteDecimalDifferencePrice in the beginning of the function
             (uint256 lPrevPrice,) = _priceCache(lBase, lQuote);
@@ -381,7 +381,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _writePriceCache(address aToken0, address aToken1, uint256 lNewPrice) internal {
+    function _writePriceCache(address aToken0, address aToken1, uint256 aNewPrice) internal {
+        if (aNewPrice == 0 || aNewPrice > 1e36) revert PriceOutOfRange(aNewPrice);
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
         bytes32 lData;
@@ -392,7 +393,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         int256 lDiff = lData.getDecimalDifference();
 
-        lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDiff) | bytes32(lNewPrice);
+        lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDiff) | bytes32(aNewPrice);
         assembly {
             sstore(lSlot, lData)
         }
