@@ -451,7 +451,13 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(lAmountOut, 0);
     }
 
-    function testGetQuote_SameBaseQuote() external { }
+    function testGetQuote_SameBaseQuote(uint256 aAmtIn, address aToken) external {
+        // act
+        uint lAmtOut = _oracle.getQuote(aAmtIn, aToken, aToken);
+
+        // assert
+        assertEq(lAmtOut, aAmtIn);
+    }
 
     function testUpdatePriceDeviationThreshold(uint256 aNewThreshold) external {
         // assume

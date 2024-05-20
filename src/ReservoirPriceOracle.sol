@@ -399,6 +399,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
+        if (aBase == aQuote) return aAmount;
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
