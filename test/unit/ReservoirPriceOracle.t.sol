@@ -1016,7 +1016,11 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.setRoute(address(_tokenB), address(_tokenC), lRoute);
 
         // act & assert
-        vm.expectRevert(abi.encodeWithSelector(PriceOutOfRange.selector, 2028266268535138201503457042228640366328194935292146200000));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PriceOutOfRange.selector, 2_028_266_268_535_138_201_503_457_042_228_640_366_328_194_935_292_146_200_000
+            )
+        );
         _oracle.updatePrice(address(_tokenB), address(_tokenC), address(0));
     }
 

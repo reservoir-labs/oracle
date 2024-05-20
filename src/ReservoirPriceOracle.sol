@@ -195,10 +195,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function getTimeWeightedAverage(OracleAverageQuery[] memory aQueries)
         public
         view
-        returns (
-            // nonReentrant
-            uint256[] memory rResults
-        )
+        returns (uint256[] memory rResults)
     {
         rResults = new uint256[](aQueries.length);
 
@@ -216,7 +213,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     /// @inheritdoc IReservoirPriceOracle
-    function getLatest(OracleLatestQuery calldata aQuery) external view /*nonReentrant*/ returns (uint256) {
+    function getLatest(OracleLatestQuery calldata aQuery) external view returns (uint256) {
         (address lToken0, address lToken1) = aQuery.base.sortTokens(aQuery.quote);
         ReservoirPair lPair = pairs[lToken0][lToken1];
         _validatePair(lPair);
@@ -230,10 +227,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function getPastAccumulators(OracleAccumulatorQuery[] memory aQueries)
         external
         view
-        returns (
-            // nonReentrant
-            int256[] memory rResults
-        )
+        returns (int256[] memory rResults)
     {
         rResults = new int256[](aQueries.length);
 
@@ -383,8 +377,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     function _writePriceCache(address aToken0, address aToken1, uint256 aNewPrice) internal {
         if (aNewPrice == 0 || aNewPrice > 1e36) revert PriceOutOfRange(aNewPrice);
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
+        bytes32 lSlot = aToken0.calculateSlot(aToken1);
         bytes32 lData;
         assembly {
             lData := sload(lSlot)
@@ -467,7 +461,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     // sets a specific pair to serve as price feed for a certain route
-    function designatePair(address aToken0, address aToken1, ReservoirPair aPair) external nonReentrant onlyOwner {
+    function designatePair(address aToken0, address aToken1, ReservoirPair aPair) external onlyOwner {
         (aToken0, aToken1) = aToken0.sortTokens(aToken1);
         assert(aToken0 == address(aPair.token0()) && aToken1 == address(aPair.token1()));
 
