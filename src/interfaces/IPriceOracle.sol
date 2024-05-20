@@ -21,9 +21,4 @@ interface IPriceOracle {
         external
         view
         returns (uint256 bidOut, uint256 askOut);
-
-    error PO_BaseUnsupported();
-    error PO_QuoteUnsupported();
-    error PO_Overflow();
-    error PO_NoPath();
 }

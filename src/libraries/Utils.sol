@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import { PriceOutOfRange } from "src/Errors.sol";
+import { OracleErrors } from "src/libraries/OracleErrors.sol";
 
 library Utils {
     /// @dev Square of 1e18 (WAD)
@@ -18,7 +18,7 @@ library Utils {
     }
 
     function invertWad(uint256 x) internal pure returns (uint256) {
-        if (x == 0 || x > WAD_SQUARED) revert PriceOutOfRange(x);
+        if (x == 0 || x > WAD_SQUARED) revert OracleErrors.PriceOutOfRange(x);
 
         return WAD_SQUARED / x;
     }

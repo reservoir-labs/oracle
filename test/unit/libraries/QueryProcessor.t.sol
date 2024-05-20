@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import { BaseTest, FactoryStoreLib, GenericFactory } from "test/__fixtures/BaseTest.t.sol";
 
-import { Buffer, OracleNotInitialized, InvalidSeconds, QueryTooOld, BadSecs } from "src/libraries/QueryProcessor.sol";
+import { Buffer, OracleErrors } from "src/libraries/QueryProcessor.sol";
 import { QueryProcessorWrapper, ReservoirPair, Observation, Variable } from "test/wrapper/QueryProcessorWrapper.sol";
 
 contract QueryProcessorTest is BaseTest {
@@ -308,7 +308,7 @@ contract QueryProcessorTest is BaseTest {
 
     function testGetInstantValue_NotInitialized(uint256 aIndex) external {
         // act & assert
-        vm.expectRevert(OracleNotInitialized.selector);
+        vm.expectRevert(OracleErrors.OracleNotInitialized.selector);
         _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, aIndex, false);
     }
 
@@ -323,7 +323,7 @@ contract QueryProcessorTest is BaseTest {
         _fillBuffer(5, Buffer.SIZE);
 
         // act & assert - should revert for all indexes that are beyond the bounds of buffer
-        vm.expectRevert(OracleNotInitialized.selector);
+        vm.expectRevert(OracleErrors.OracleNotInitialized.selector);
         _queryProcessor.getInstantValue(_pair, lVar, lIndex, aReciprocal);
     }
 
@@ -335,7 +335,7 @@ contract QueryProcessorTest is BaseTest {
         (,,, uint16 lIndex) = _pair.getReserves();
 
         // act & assert
-        vm.expectRevert(OracleNotInitialized.selector);
+        vm.expectRevert(OracleErrors.OracleNotInitialized.selector);
         _queryProcessor.getPastAccumulator(_pair, lVar, lIndex, 0);
     }
 
@@ -355,7 +355,7 @@ contract QueryProcessorTest is BaseTest {
         (,,, uint16 lIndex) = _pair.getReserves();
 
         // act & assert
-        vm.expectRevert(InvalidSeconds.selector);
+        vm.expectRevert(OracleErrors.InvalidSeconds.selector);
         _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
     }
 
@@ -381,7 +381,7 @@ contract QueryProcessorTest is BaseTest {
         );
 
         // act & assert
-        vm.expectRevert(QueryTooOld.selector);
+        vm.expectRevert(OracleErrors.QueryTooOld.selector);
         _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
     }
 
@@ -402,7 +402,7 @@ contract QueryProcessorTest is BaseTest {
 
     function testGetTimeWeightedAverage_BadSecs() external {
         // act & assert
-        vm.expectRevert(BadSecs.selector);
+        vm.expectRevert(OracleErrors.BadSecs.selector);
         _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, 0, 0, 0);
     }
 }

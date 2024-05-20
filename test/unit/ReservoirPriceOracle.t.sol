@@ -3,10 +3,11 @@ pragma solidity ^0.8.0;
 
 import { BaseTest, console2, ReservoirPair, MintableERC20 } from "test/__fixtures/BaseTest.t.sol";
 
-import { Utils, PriceOutOfRange } from "src/libraries/Utils.sol";
+import { Utils } from "src/libraries/Utils.sol";
 import {
     Buffer,
     Variable,
+    OracleErrors,
     OracleLatestQuery,
     OracleAccumulatorQuery,
     OracleAverageQuery,
@@ -990,9 +991,9 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint64 lNewPeriod = uint64(bound(aNewPeriod, 1 hours + 1, type(uint64).max));
 
         // act & assert
-        vm.expectRevert(ReservoirPriceOracle.RPC_INVALID_TWAP_PERIOD.selector);
+        vm.expectRevert(OracleErrors.InvalidTwapPeriod.selector);
         _oracle.updateTwapPeriod(lNewPeriod);
-        vm.expectRevert(ReservoirPriceOracle.RPC_INVALID_TWAP_PERIOD.selector);
+        vm.expectRevert(OracleErrors.InvalidTwapPeriod.selector);
         _oracle.updateTwapPeriod(0);
     }
 
@@ -1018,7 +1019,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         // act & assert
         vm.expectRevert(
             abi.encodeWithSelector(
-                PriceOutOfRange.selector, 2_028_266_268_535_138_201_503_457_042_228_640_366_328_194_935_292_146_200_000
+                OracleErrors.PriceOutOfRange.selector,
+                2_028_266_268_535_138_201_503_457_042_228_640_366_328_194_935_292_146_200_000
             )
         );
         _oracle.updatePrice(address(_tokenB), address(_tokenC), address(0));
@@ -1033,7 +1035,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         lRoute[1] = lToken1;
 
         // act & assert
-        vm.expectRevert(ReservoirPriceOracle.RPC_SAME_TOKEN.selector);
+        vm.expectRevert(OracleErrors.SameToken.selector);
         _oracle.setRoute(lToken0, lToken1, lRoute);
     }
 
@@ -1046,7 +1048,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         lRoute[1] = lToken1;
 
         // act & assert
-        vm.expectRevert(ReservoirPriceOracle.RPC_TOKENS_UNSORTED.selector);
+        vm.expectRevert(OracleErrors.TokensUnsorted.selector);
         _oracle.setRoute(lToken0, lToken1, lRoute);
     }
 
@@ -1064,11 +1066,11 @@ contract ReservoirPriceOracleTest is BaseTest {
         lTooShort[0] = lToken0;
 
         // act & assert
-        vm.expectRevert(ReservoirPriceOracle.RPC_INVALID_ROUTE_LENGTH.selector);
+        vm.expectRevert(OracleErrors.InvalidRouteLength.selector);
         _oracle.setRoute(lToken0, lToken1, lTooLong);
 
         // act & assert
-        vm.expectRevert(ReservoirPriceOracle.RPC_INVALID_ROUTE_LENGTH.selector);
+        vm.expectRevert(OracleErrors.InvalidRouteLength.selector);
         _oracle.setRoute(lToken0, lToken1, lTooShort);
     }
 
@@ -1087,9 +1089,9 @@ contract ReservoirPriceOracleTest is BaseTest {
         lInvalidRoute2[2] = lToken1;
 
         // act & assert
-        vm.expectRevert(ReservoirPriceOracle.RPC_INVALID_ROUTE.selector);
+        vm.expectRevert(OracleErrors.InvalidRoute.selector);
         _oracle.setRoute(lToken0, lToken1, lInvalidRoute1);
-        vm.expectRevert(ReservoirPriceOracle.RPC_INVALID_ROUTE.selector);
+        vm.expectRevert(OracleErrors.InvalidRoute.selector);
         _oracle.setRoute(lToken0, lToken1, lInvalidRoute2);
     }
 
@@ -1102,13 +1104,13 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testGetQuote_NoPath() external {
         // act & assert
-        vm.expectRevert(IPriceOracle.PO_NoPath.selector);
+        vm.expectRevert(OracleErrors.NoPath.selector);
         _oracle.getQuote(123, address(123), address(456));
     }
 
     function testGetQuote_PriceZero() external {
         // act & assert
-        vm.expectRevert(ReservoirPriceOracle.RPC_PRICE_ZER0.selector);
+        vm.expectRevert(OracleErrors.PriceZero.selector);
         _oracle.getQuote(32_111, address(_tokenA), address(_tokenB));
     }
 
@@ -1118,7 +1120,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         _writePriceCache(address(_tokenB), address(_tokenC), 0);
 
         // act & assert
-        vm.expectRevert(ReservoirPriceOracle.RPC_PRICE_ZER0.selector);
+        vm.expectRevert(OracleErrors.PriceZero.selector);
         _oracle.getQuote(321_321, address(_tokenA), address(_tokenD));
     }
 }

@@ -18,7 +18,7 @@ import { Buffer } from "amm-core/libraries/Buffer.sol";
 import { ReservoirPair, Observation } from "amm-core/ReservoirPair.sol";
 
 import { Variable, OracleAverageQuery, OracleAccumulatorQuery } from "src/interfaces/IReservoirPriceOracle.sol";
-import { BadVariableRequest, OracleNotInitialized, InvalidSeconds, QueryTooOld, BadSecs } from "src/Errors.sol";
+import { OracleErrors } from "src/libraries/OracleErrors.sol";
 import { Samples } from "src/libraries/Samples.sol";
 
 /**
@@ -41,7 +41,7 @@ library QueryProcessor {
         returns (uint256)
     {
         Observation memory sample = pair.observation(index);
-        if (sample.timestamp == 0) revert OracleNotInitialized();
+        if (sample.timestamp == 0) revert OracleErrors.OracleNotInitialized();
 
         int256 rawInstantValue = sample.instant(variable);
         if (reciprocal) {
@@ -63,7 +63,7 @@ library QueryProcessor {
         uint256 ago,
         uint16 latestIndex
     ) internal view returns (uint256) {
-        if (secs == 0) revert BadSecs();
+        if (secs == 0) revert OracleErrors.BadSecs();
 
         unchecked {
             // getPastAccumulator reverts for any `ago`` greater than 32 bits anyway (i.e. greater than the current block.timestamp till year 2106)
@@ -98,7 +98,7 @@ library QueryProcessor {
     {
         // solhint-disable not-rely-on-time
         // `ago` must not be before the epoch.
-        if (block.timestamp < ago) revert InvalidSeconds();
+        if (block.timestamp < ago) revert OracleErrors.InvalidSeconds();
         uint256 lookUpTime;
         unchecked {
             lookUpTime = block.timestamp - ago;
@@ -108,7 +108,7 @@ library QueryProcessor {
         uint256 latestTimestamp = latestSample.timestamp;
 
         // The latest sample only has a non-zero timestamp if no data was ever processed and stored in the buffer.
-        if (latestTimestamp == 0) revert OracleNotInitialized();
+        if (latestTimestamp == 0) revert OracleErrors.OracleNotInitialized();
 
         if (latestTimestamp <= lookUpTime) {
             // The accumulator at times ahead of the latest one are computed by extrapolating the latest data. This is
@@ -145,7 +145,7 @@ library QueryProcessor {
                 }
 
                 // Finally check that the look up time is not previous to the oldest timestamp.
-                if (oldestTimestamp > lookUpTime) revert QueryTooOld();
+                if (oldestTimestamp > lookUpTime) revert OracleErrors.QueryTooOld();
             }
 
             // Perform binary search to find nearest samples to the desired timestamp.

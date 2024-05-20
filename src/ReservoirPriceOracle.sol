@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import { IERC20 } from "forge-std/interfaces/IERC20.sol";
 
-import { NoDesignatedPair, PriceOutOfRange } from "src/Errors.sol";
+import { OracleErrors } from "src/libraries/OracleErrors.sol";
 import {
     IReservoirPriceOracle,
     OracleAverageQuery,
@@ -46,20 +46,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     event TwapPeriod(uint256 newPeriod);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
-    //                                       ERRORS                                              //
-    ///////////////////////////////////////////////////////////////////////////////////////////////
-
-    error RPC_THRESHOLD_TOO_HIGH();
-    error RPC_INVALID_TWAP_PERIOD();
-    error RPC_SAME_TOKEN();
-    error RPC_TOKENS_UNSORTED();
-    error RPC_INVALID_ROUTE_LENGTH();
-    error RPC_INVALID_ROUTE();
-    error RPC_WRITE_TO_NON_SIMPLE_ROUTE();
-    error RPC_UNSUPPORTED_TOKEN_DECIMALS();
-    error RPC_PRICE_ZER0();
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -91,10 +77,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @dev contract will hold native tokens to be distributed as gas bounty for updating the prices
     /// anyone can contribute native tokens to this contract
     receive() external payable { }
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////
-    //                                       MODIFIERS                                           //
-    ///////////////////////////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                   PUBLIC FUNCTIONS                                        //
@@ -152,7 +134,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
         (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
-        if (lRoute.length == 0) revert PO_NoPath();
+        if (lRoute.length == 0) revert OracleErrors.NoPath();
 
         OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](lRoute.length - 1);
 
@@ -255,7 +237,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     function _validatePair(ReservoirPair aPair) internal pure {
-        if (address(aPair) == address(0)) revert NoDesignatedPair();
+        if (address(aPair) == address(0)) revert OracleErrors.NoDesignatedPair();
     }
 
     // TODO: replace this with safe, audited lib function
@@ -376,14 +358,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function _writePriceCache(address aToken0, address aToken1, uint256 aNewPrice) internal {
-        if (aNewPrice == 0 || aNewPrice > 1e36) revert PriceOutOfRange(aNewPrice);
+        if (aNewPrice == 0 || aNewPrice > 1e36) revert OracleErrors.PriceOutOfRange(aNewPrice);
 
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
         bytes32 lData;
         assembly {
             lData := sload(lSlot)
         }
-        if (!lData.isSimplePrice()) revert RPC_WRITE_TO_NON_SIMPLE_ROUTE();
+        if (!lData.isSimplePrice()) revert OracleErrors.WriteToNonSimpleRoute();
 
         int256 lDiff = lData.getDecimalDifference();
 
@@ -401,7 +383,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
         if (lRoute.length == 0) {
-            revert PO_NoPath();
+            revert OracleErrors.NoPath();
         }
         // for composite route, read simple prices to derive composite price
         else if (lRoute.length > 2) {
@@ -418,7 +400,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             }
         }
 
-        if (lPrice == 0) revert RPC_PRICE_ZER0();
+        if (lPrice == 0) revert OracleErrors.PriceZero();
         lPrice = lToken0 == aBase ? lPrice : lPrice.invertWad();
         lDecimalDiff = lToken0 == aBase ? lDecimalDiff : -lDecimalDiff;
 
@@ -440,7 +422,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     function updatePriceDeviationThreshold(uint64 aNewThreshold) public onlyOwner {
         if (aNewThreshold > MAX_DEVIATION_THRESHOLD) {
-            revert RPC_THRESHOLD_TOO_HIGH();
+            revert OracleErrors.PriceDeviationThresholdTooHigh();
         }
 
         priceDeviationThreshold = aNewThreshold;
@@ -449,7 +431,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     function updateTwapPeriod(uint64 aNewPeriod) public onlyOwner {
         if (aNewPeriod == 0 || aNewPeriod > MAX_TWAP_PERIOD) {
-            revert RPC_INVALID_TWAP_PERIOD();
+            revert OracleErrors.InvalidTwapPeriod();
         }
         twapPeriod = aNewPeriod;
         emit TwapPeriod(aNewPeriod);
@@ -483,10 +465,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function setRoute(address aToken0, address aToken1, address[] memory aRoute) public onlyOwner {
         uint256 lRouteLength = aRoute.length;
 
-        if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
-        if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
-        if (lRouteLength > MAX_ROUTE_LENGTH || lRouteLength < 2) revert RPC_INVALID_ROUTE_LENGTH();
-        if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert RPC_INVALID_ROUTE();
+        if (aToken0 == aToken1) revert OracleErrors.SameToken();
+        if (aToken1 < aToken0) revert OracleErrors.TokensUnsorted();
+        if (lRouteLength > MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
+        if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
 
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
@@ -494,7 +476,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (lRouteLength == 2) {
             uint256 lToken0Decimals = IERC20(aToken0).decimals();
             uint256 lToken1Decimals = IERC20(aToken1).decimals();
-            if (lToken0Decimals > 18 || lToken1Decimals > 18) revert RPC_UNSUPPORTED_TOKEN_DECIMALS();
+            if (lToken0Decimals > 18 || lToken1Decimals > 18) revert OracleErrors.UnsupportedTokenDecimals();
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
@@ -546,8 +528,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function clearRoute(address aToken0, address aToken1) external onlyOwner {
-        if (aToken0 == aToken1) revert RPC_SAME_TOKEN();
-        if (aToken1 < aToken0) revert RPC_TOKENS_UNSORTED();
+        if (aToken0 == aToken1) revert OracleErrors.SameToken();
+        if (aToken1 < aToken0) revert OracleErrors.TokensUnsorted();
 
         (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
 
