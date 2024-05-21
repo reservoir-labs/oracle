@@ -17,10 +17,12 @@ import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
+import { LibSort } from "lib/solady/src/utils/LibSort.sol";
 import { FlagsLib } from "src/libraries/FlagsLib.sol";
 
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using FixedPointMathLib for uint256;
+    using LibSort for address[];
     using FlagsLib for bytes32;
     using QueryProcessor for ReservoirPair;
     using Utils for *;
@@ -58,7 +60,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// beyond the `priceDeviationThreshold`
     uint64 public rewardGasAmount;
 
-    /// @notice TWAP period for querying the oracle in seconds
+    /// @notice TWAP period (in seconds) for querying the oracle
     uint64 public twapPeriod;
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
@@ -384,35 +386,48 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         if (lRoute.length == 0) {
             revert OracleErrors.NoPath();
+        } else if (lRoute.length == 2) {
+            if (lPrice == 0) revert OracleErrors.PriceZero();
+            rOut = _calcAmtOut(
+                aAmount,
+                lRoute[0] == aBase ? lPrice : lPrice.invertWad(),
+                lRoute[0] == aBase ? lDecimalDiff : -lDecimalDiff
+            );
         }
         // for composite route, read simple prices to derive composite price
-        else if (lRoute.length > 2) {
-            lPrice = WAD;
+        else {
+            uint256 lIntermediateAmount = aAmount;
+
+            // reverse the route so we always perform calculations starting from index 0
+            if (lRoute[0] != aBase) lRoute.reverse();
+            assert(lRoute[0] == aBase);
+
             for (uint256 i = 0; i < lRoute.length - 1; ++i) {
                 (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
+                // it is assumed that intermediate routes defined here are simple routes and not composite routes
+                (lPrice, lDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
 
-                // it is assumed that subroutes defined here are simple routes and not composite routes
-                // meaning, each segment of the route represents a real price between pair, and not the result of composite routing
-                // therefore we do not check `_route` again to ensure that there is indeed a route
-                (uint256 lRoutePrice, int256 lRouteDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
-                lDecimalDiff += (lLowerToken == lRoute[i]) ? lRouteDecimalDiff : -lRouteDecimalDiff; // will not over/underflow given that each value is between -18 and +18 and that the final value will also be within this range
-                lPrice = lPrice * (lLowerToken == lRoute[i] ? lRoutePrice : lRoutePrice.invertWad()) / WAD;
+                if (lPrice == 0) revert OracleErrors.PriceZero();
+                if (lLowerToken != lRoute[i]) {
+                    lPrice = lPrice.invertWad();
+                    lDecimalDiff = -lDecimalDiff;
+                }
+                lIntermediateAmount = _calcAmtOut(lIntermediateAmount, lPrice, lDecimalDiff);
             }
+            rOut = lIntermediateAmount;
         }
+    }
 
-        if (lPrice == 0) revert OracleErrors.PriceZero();
-        lPrice = lToken0 == aBase ? lPrice : lPrice.invertWad();
-        lDecimalDiff = lToken0 == aBase ? lDecimalDiff : -lDecimalDiff;
-
+    function _calcAmtOut(uint256 aAmountIn, uint256 aPrice, int256 aDecimalDiff) internal pure returns (uint256 rOut) {
         // quoteAmountOut = baseAmountIn * wadPrice * quoteDecimalScale / baseDecimalScale / WAD
-        if (lDecimalDiff > 0) {
-            rOut = (aAmount * lPrice).fullMulDiv(10 ** uint256(lDecimalDiff), WAD);
-        } else if (lDecimalDiff < 0) {
-            rOut = aAmount.fullMulDiv(lPrice, 10 ** uint256(-lDecimalDiff) * WAD);
+        if (aDecimalDiff > 0) {
+            rOut = (aAmountIn * aPrice).fullMulDiv(10 ** uint256(aDecimalDiff), WAD);
+        } else if (aDecimalDiff < 0) {
+            rOut = aAmountIn.fullMulDiv(aPrice, 10 ** uint256(-aDecimalDiff) * WAD);
         }
         // equal decimals
         else {
-            rOut = aAmount.fullMulDiv(lPrice, WAD);
+            rOut = aAmountIn.fullMulDiv(aPrice, WAD);
         }
     }
 
