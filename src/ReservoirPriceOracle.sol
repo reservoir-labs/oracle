@@ -387,11 +387,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             revert OracleErrors.NoPath();
         } else if (lRoute.length == 2) {
             if (lPrice == 0) revert OracleErrors.PriceZero();
-            rOut = _calcAmtOut(
-                aAmount,
-                lRoute[0] == aBase ? lPrice : lPrice.invertWad(),
-                lRoute[0] == aBase ? lDecimalDiff : -lDecimalDiff
-            );
+            rOut = _calcAmtOut(aAmount, lPrice, lDecimalDiff, lRoute[0] != aBase);
         }
         // for composite route, read simple prices to derive composite price
         else {
@@ -407,26 +403,38 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 (lPrice, lDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
 
                 if (lPrice == 0) revert OracleErrors.PriceZero();
-                if (lLowerToken != lRoute[i]) {
-                    lPrice = lPrice.invertWad();
-                    lDecimalDiff = -lDecimalDiff;
-                }
-                lIntermediateAmount = _calcAmtOut(lIntermediateAmount, lPrice, lDecimalDiff);
+                lIntermediateAmount = _calcAmtOut(lIntermediateAmount, lPrice, lDecimalDiff, lRoute[i] != lLowerToken);
             }
             rOut = lIntermediateAmount;
         }
     }
 
-    function _calcAmtOut(uint256 aAmountIn, uint256 aPrice, int256 aDecimalDiff) internal pure returns (uint256 rOut) {
-        // quoteAmountOut = baseAmountIn * wadPrice * quoteDecimalScale / baseDecimalScale / WAD
-        if (aDecimalDiff > 0) {
-            rOut = (aAmountIn * aPrice).fullMulDiv(10 ** uint256(aDecimalDiff), WAD);
-        } else if (aDecimalDiff < 0) {
-            rOut = aAmountIn.fullMulDiv(aPrice, 10 ** uint256(-aDecimalDiff) * WAD);
-        }
-        // equal decimals
-        else {
-            rOut = aAmountIn.fullMulDiv(aPrice, WAD);
+    /// @dev aPrice cannot be 0, as checked by _getQuote
+    function _calcAmtOut(uint256 aAmountIn, uint256 aPrice, int256 aDecimalDiff, bool aInverse)
+        internal
+        pure
+        returns (uint256 rOut)
+    {
+        // formula: baseAmountOut = quoteAmountIn * WAD * baseDecimalScale / baseQuotePrice / quoteDecimalScale
+        if (aInverse) {
+            if (aDecimalDiff > 0) {
+                rOut = aAmountIn.fullMulDiv(WAD, aPrice) / 10 ** uint256(aDecimalDiff);
+            } else if (aDecimalDiff < 0) {
+                rOut = aAmountIn.fullMulDiv(WAD * 10 ** uint256(-aDecimalDiff), aPrice);
+            }
+            // equal decimals
+            else {
+                rOut = aAmountIn.fullMulDiv(WAD, aPrice);
+            }
+        } else {
+            // formula: quoteAmountOut = baseAmountIn * baseQuotePrice * quoteDecimalScale / baseDecimalScale / WAD
+            if (aDecimalDiff > 0) {
+                rOut = aAmountIn.fullMulDiv(aPrice * 10 ** uint256(aDecimalDiff), WAD);
+            } else if (aDecimalDiff < 0) {
+                rOut = aAmountIn.fullMulDiv(aPrice, 10 ** uint256(-aDecimalDiff) * WAD);
+            } else {
+                rOut = aAmountIn.fullMulDiv(aPrice, WAD);
+            }
         }
     }
 

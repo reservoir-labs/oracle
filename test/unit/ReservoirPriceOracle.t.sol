@@ -139,9 +139,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint256 lAmountOut = _oracle.getQuote(lAmountIn, address(_tokenB), address(_tokenA));
 
         // assert
-        assertEq(
-            lAmountOut, lAmountIn * lPrice.invertWad() * 10 ** _tokenA.decimals() / 10 ** _tokenB.decimals() / 1e18
-        );
+        assertEq(lAmountOut, lAmountIn * WAD * (10 ** _tokenA.decimals()) / lPrice / (10 ** _tokenB.decimals()));
     }
 
     function testGetQuote_MultipleHops() public {
@@ -273,7 +271,11 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint256 lAmtBOut = _oracle.getQuote(lAmtIn * 10 ** lTokenADecimal, address(lTokenA), address(lTokenB));
 
         // assert
-        assertEq(lAmtBOut, lAmtIn * (lTokenA < lTokenB ? lPrice : lPrice.invertWad()) * 10 ** lTokenBDecimal / 1e18);
+        uint256 lExpectedAmt = lTokenA < lTokenB
+            ? lAmtIn * 10 ** lTokenADecimal * lPrice * 10 ** lTokenBDecimal / 10 ** lTokenADecimal / WAD
+            : lAmtIn * 10 ** lTokenADecimal * WAD * 10 ** lTokenBDecimal / lPrice / 10 ** lTokenADecimal;
+
+        assertEq(lAmtBOut, lExpectedAmt);
     }
 
     function testGetQuote_RandomizeAllParam_2HopRoute(
@@ -336,11 +338,14 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint256 lAmtCOut = _oracle.getQuote(lAmtIn * 10 ** lTokenADecimal, address(lTokenA), address(lTokenC));
 
         // assert
-        uint256 lPriceAC = (lTokenA < lTokenB ? lPrice1 : lPrice1.invertWad())
-            * (lTokenB < lTokenC ? lPrice2 : lPrice2.invertWad()) / WAD;
-        // TODO: the difference is due to the way the arithmetic is done, whether it is inverted first
-        // and which price is multiplied first
-        assertApproxEqRel(lAmtCOut, lAmtIn * lPriceAC * (10 ** lTokenCDecimal) / WAD, 0.005e18);
+        uint256 lExpectedAmtBOut = lTokenA < lTokenB
+            ? lAmtIn * 10 ** lTokenADecimal * lPrice1 * 10 ** lTokenBDecimal / 10 ** lTokenADecimal / WAD
+            : lAmtIn * 10 ** lTokenADecimal * WAD * 10 ** lTokenBDecimal / lPrice1 / 10 ** lTokenADecimal;
+        uint256 lExpectedAmtCOut = lTokenB < lTokenC
+            ? lExpectedAmtBOut * lPrice2 * 10 ** lTokenCDecimal / 10 ** lTokenBDecimal / WAD
+            : lExpectedAmtBOut * WAD * 10 ** lTokenCDecimal / lPrice2 / 10 ** lTokenBDecimal;
+
+        assertEq(lAmtCOut, lExpectedAmtCOut);
     }
 
     function testGetQuote_RandomizeAllParam_3HopRoute(
