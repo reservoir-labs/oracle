@@ -282,10 +282,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         assembly {
             lFirstWord := sload(lSlot)
         }
-        bytes32 lFlag = lFirstWord.getRouteFlag();
 
         // simple route
-        if (lFlag == FlagsLib.FLAG_SIMPLE_PRICE) {
+        if (lFirstWord.isSimplePrice()) {
             lResults[0] = aToken0;
             lResults[1] = aToken1;
             lRouteLength = 2;
@@ -293,27 +292,29 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             rPrice = lFirstWord.getPrice();
         }
         // composite route
-        else if (lFlag == FlagsLib.FLAG_COMPOSITE_NEXT) {
-            bytes32 lSecondWord;
-            assembly {
-                lSecondWord := sload(add(lSlot, 1))
-            }
+        else if (lFirstWord.isCompositeRoute()) {
             address lSecondToken = lFirstWord.getTokenFirstWord();
-            address lThirdToken = lFirstWord.getThirdToken(lSecondWord);
+
             lResults[0] = aToken0;
             lResults[1] = lSecondToken;
-            lResults[2] = lThirdToken;
-            lRouteLength = 3;
 
-            lFlag = lFirstWord.getSecondRouteFlag();
-            if (lFlag == FlagsLib.FLAG_COMPOSITE_NEXT) {
-                address lFourthToken = lSecondWord.getFourthToken();
-                lResults[3] = lFourthToken;
-                lRouteLength += 1;
-            } else if (lFlag == FlagsLib.FLAG_COMPOSITE_END) { }
+            if (lFirstWord.is3HopRoute()) {
+                bytes32 lSecondWord;
+                assembly {
+                    lSecondWord := sload(add(lSlot, 1))
+                }
+                address lThirdToken = lFirstWord.getThirdToken(lSecondWord);
+
+                lResults[2] = lThirdToken ;
+                lResults[3] = aToken1;
+                lRouteLength = 4;
+            } else {
+                lResults[2] = aToken1;
+                lRouteLength = 3;
+            }
         }
         // no route
-        else if (lFlag == FlagsLib.FLAG_UNINITIALIZED) { }
+        else if (lFirstWord.isUninitialized()) { }
 
         rRoute = new address[](lRouteLength);
         for (uint256 i = 0; i < lRouteLength; ++i) {
@@ -512,39 +513,32 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         else {
             address lSecondToken = aRoute[1];
             address lThirdToken = aRoute[2];
-            // Set the uppermost byte of lFirstWord to FLAG_COMPOSITE_NEXT for intermediate hops
-            bytes32 lFirstWord = FlagsLib.FLAG_COMPOSITE_NEXT << 248;
+
             // Move the address to start on the 2nd byte.
             bytes32 lSecondTokenData = bytes32(bytes20(lSecondToken)) >> 8;
-            bytes32 lThirdTokenFirst10Bytes = bytes32(bytes20(lThirdToken)) >> 176;
-
-            // Trim away the first 10 bytes since we only want the last 10 bytes.
-            bytes32 lThirdTokenSecond10Bytes = bytes32(bytes20(lThirdToken) << 80);
-            bytes32 lSecondWord;
 
             if (lRouteLength == 3) {
-                // Set flag before third token to FLAG_COMPOSITE_END
-                lFirstWord = lFirstWord | lSecondTokenData | FlagsLib.FLAG_COMPOSITE_END << 80 | lThirdTokenFirst10Bytes;
-
-                lSecondWord = lThirdTokenSecond10Bytes;
+                bytes32 lData = FlagsLib.FLAG_2_HOP_ROUTE | lSecondTokenData;
+                assembly {
+                    sstore(lSlot, lData)
+                }
             } else if (lRouteLength == 4) {
-                // Set flag before third token to FLAG_COMPOSITE_NEXT as there are 4 tokens in total
-                lFirstWord =
-                    lFirstWord | lSecondTokenData | FlagsLib.FLAG_COMPOSITE_NEXT << 80 | lThirdTokenFirst10Bytes;
+                bytes32 lThirdTokenTop10Bytes = bytes32(bytes20(lThirdToken)) >> 176;
+                bytes32 lFirstWord = FlagsLib.FLAG_3_HOP_ROUTE | lSecondTokenData | lThirdTokenTop10Bytes;
 
-                bytes32 lFourthTokenData = bytes32(bytes20(aToken1)) >> 88;
-                lSecondWord = lThirdTokenSecond10Bytes | FlagsLib.FLAG_COMPOSITE_END << 168 | lFourthTokenData;
+                // Trim away the first 10 bytes since we only want the last 10 bytes.
+                bytes32 lThirdTokenBottom10Bytes = bytes32(bytes20(lThirdToken) << 80);
+                bytes32 lSecondWord = lThirdTokenBottom10Bytes;
 
+                // Write two words to storage.
+                assembly {
+                    sstore(lSlot, lFirstWord)
+                    sstore(add(lSlot, 1), lSecondWord)
+                }
                 _checkAndPopulateIntermediateRoute(lThirdToken, aToken1);
             }
             _checkAndPopulateIntermediateRoute(aToken0, lSecondToken);
             _checkAndPopulateIntermediateRoute(lSecondToken, lThirdToken);
-
-            // Write the two words of route into storage.
-            assembly {
-                sstore(lSlot, lFirstWord)
-                sstore(add(lSlot, 1), lSecondWord)
-            }
         }
         emit Route(aToken0, aToken1, aRoute);
     }
@@ -561,8 +555,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         assembly {
             sstore(lSlot, 0)
         }
-        // routes with length 3/4 use two words of storage
-        if (lRoute.length > 2) {
+        // routes with length 4 use two words of storage
+        if (lRoute.length == 4) {
             assembly {
                 sstore(add(lSlot, 1), 0)
             }

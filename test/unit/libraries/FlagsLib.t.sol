@@ -9,6 +9,20 @@ contract FlagsLibTest is Test {
     using FlagsLib for bytes32;
     using FlagsLib for int256;
 
+    function testIsCompositeRoute() external {
+        // arrange
+        bytes32 lUninitialized = FlagsLib.FLAG_UNINITIALIZED;
+        bytes32 l1HopRoute = FlagsLib.FLAG_SIMPLE_PRICE;
+        bytes32 l2HopRoute = FlagsLib.FLAG_2_HOP_ROUTE;
+        bytes32 l3HopRoute = FlagsLib.FLAG_3_HOP_ROUTE;
+
+        // act & assert
+        assertTrue(l2HopRoute.isCompositeRoute());
+        assertTrue(l3HopRoute.isCompositeRoute());
+        assertFalse(lUninitialized.isCompositeRoute());
+        assertFalse(l1HopRoute.isCompositeRoute());
+    }
+
     function testGetDecimalDifference() external {
         // arrange
         bytes32 lPositive = hex"0012";
