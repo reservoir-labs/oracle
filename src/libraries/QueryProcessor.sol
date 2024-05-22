@@ -45,7 +45,9 @@ library QueryProcessor {
 
         int256 rawInstantValue = sample.instant(variable);
         if (reciprocal) {
-            // safety: cast will not overflow as instant values are within int24. See `Observation.sol`
+            // SAFETY:
+            //
+            // Cast will not overflow as instant values are within int24. See `Observation.sol`.
             unchecked {
                 rawInstantValue = -rawInstantValue;
             }
@@ -65,9 +67,12 @@ library QueryProcessor {
     ) internal view returns (uint256) {
         if (secs == 0) revert OracleErrors.BadSecs();
 
+        // SAFETY:
+        //
+        // `getPastAccumulator` reverts for any `ago`` greater than 32 bits anyway (i.e. greater than the current block.timestamp till year 2106)
+        // So if either `ago` or `ago + secs` is larger than 32 bits, it will revert
+        // Therefore it is safe to use unchecked here
         unchecked {
-            // getPastAccumulator reverts for any `ago`` greater than 32 bits anyway (i.e. greater than the current block.timestamp till year 2106)
-            // so if either `ago` or `ago + secs` is larger than 32 bits, it will revert
             int256 beginAccumulator = getPastAccumulator(pair, variable, latestIndex, ago + secs);
             int256 endAccumulator = getPastAccumulator(pair, variable, latestIndex, ago);
             return LogCompression.fromLowResLog((endAccumulator - beginAccumulator) / int256(secs));
@@ -100,6 +105,9 @@ library QueryProcessor {
         // `ago` must not be before the epoch.
         if (block.timestamp < ago) revert OracleErrors.InvalidSeconds();
         uint256 lookUpTime;
+        // SAFETY:
+        //
+        // `ago` is guaranteed to be equal to or less than `block.timestamp` as checked above, so subtraction will not underflow.
         unchecked {
             lookUpTime = block.timestamp - ago;
         }
@@ -114,8 +122,10 @@ library QueryProcessor {
             // The accumulator at times ahead of the latest one are computed by extrapolating the latest data. This is
             // equivalent to the instant value not changing between the last timestamp and the look up time.
 
-            // We can use unchecked arithmetic since the accumulator can be represented in 53 bits, timestamps in 31
-            // bits, and the instant value in 22 bits.
+            // SAFETY:
+            //
+            // `latestTimestamp` is guaranteed to be equal or less than `lookUpTime` as checked above. So this subtraction will not underflow.
+            // The accumulator can be represented in 53 bits, timestamps in 31bits, and the instant value in 22 bits. So this addition will not overflow.
             unchecked {
                 uint256 elapsed = lookUpTime - latestTimestamp;
                 return latestSample.accumulator(variable) + (latestSample.instant(variable) * int256(elapsed));
@@ -152,25 +162,32 @@ library QueryProcessor {
             (Observation memory prev, Observation memory next) =
                 findNearestSample(pair, lookUpTime, oldestIndex, bufferLength);
 
+            // SAFETY:
+            //
+            // `next.timestamp` is guaranteed to be larger than `prev.timestamp`, so subtraction will not underflow.
+            uint256 samplesTimeDiff;
             unchecked {
-                // `next`'s timestamp is guaranteed to be larger than `prev`'s, so we can skip checked arithmetic.
-                uint256 samplesTimeDiff = next.timestamp - prev.timestamp;
+                samplesTimeDiff = next.timestamp - prev.timestamp;
+            }
+            if (samplesTimeDiff > 0) {
+                // We estimate the accumulator at the requested look up time by interpolating linearly between the
+                // previous and next accumulators.
 
-                if (samplesTimeDiff > 0) {
-                    // We estimate the accumulator at the requested look up time by interpolating linearly between the
-                    // previous and next accumulators.
-
-                    // We can use unchecked arithmetic since the accumulators can be represented in 53 bits, and timestamps
-                    // in 31 bits.
+                // SAFETY:
+                //
+                // The accumulators can be represented in 53 bits, and timestamps are in 31 bits. So the addition and subtraction will not under/overflow.
+                // `lookupTime` is greater than `latestTimestamp` and is thus also greater than `prev.timestamp` so subtraction will not underflow.
+                unchecked {
                     int256 samplesAccDiff = next.accumulator(variable) - prev.accumulator(variable);
                     uint256 elapsed = lookUpTime - prev.timestamp;
                     return prev.accumulator(variable) + ((samplesAccDiff * int256(elapsed)) / int256(samplesTimeDiff));
-                } else {
-                    // Rarely, one of the samples will have the exact requested look up time, which is indicated by `prev`
-                    // and `next` being the same. In this case, we simply return the accumulator at that point in time.
-                    return prev.accumulator(variable);
                 }
+            } else {
+                // Rarely, one of the samples will have the exact requested look up time, which is indicated by `prev`
+                // and `next` being the same. In this case, we simply return the accumulator at that point in time.
+                return prev.accumulator(variable);
             }
+
         }
     }
 
@@ -187,6 +204,10 @@ library QueryProcessor {
         view
         returns (Observation memory prev, Observation memory next)
     {
+        // SAFETY:
+        //
+        // As `length` is at least 1, subtractions will not underflow
+        // Additions will also not overflow as the max length is `Buffer.SIZE`
         unchecked {
             // We're going to perform a binary search in the circular buffer, which requires it to be sorted. To achieve
             // this, we offset all buffer accesses by `offset`, making the first element the oldest one.
