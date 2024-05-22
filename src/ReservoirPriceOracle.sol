@@ -23,7 +23,7 @@ import { FlagsLib } from "src/libraries/FlagsLib.sol";
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using FixedPointMathLib for uint256;
     using LibSort for address[];
-    using FlagsLib for bytes32;
+    using FlagsLib for *;
     using QueryProcessor for ReservoirPair;
     using Utils for *;
 
@@ -305,7 +305,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 }
                 address lThirdToken = lFirstWord.getThirdToken(lSecondWord);
 
-                lResults[2] = lThirdToken ;
+                lResults[2] = lThirdToken;
                 lResults[3] = aToken1;
                 lRouteLength = 4;
             } else {
@@ -371,7 +371,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         int256 lDiff = lData.getDecimalDifference();
 
-        lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDiff) | bytes32(aNewPrice);
+        lData = lDiff.packSimplePrice(aNewPrice);
         assembly {
             sstore(lSlot, lData)
         }
@@ -503,7 +503,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            bytes32 lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDiff);
+            bytes32 lData = lDiff.packSimplePrice(0);
             assembly {
                 // Write data to storage.
                 sstore(lSlot, lData)
@@ -514,21 +514,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lSecondToken = aRoute[1];
             address lThirdToken = aRoute[2];
 
-            // Move the address to start on the 2nd byte.
-            bytes32 lSecondTokenData = bytes32(bytes20(lSecondToken)) >> 8;
-
             if (lRouteLength == 3) {
-                bytes32 lData = FlagsLib.FLAG_2_HOP_ROUTE | lSecondTokenData;
+                bytes32 lData = lSecondToken.pack2HopRoute();
                 assembly {
                     sstore(lSlot, lData)
                 }
             } else if (lRouteLength == 4) {
-                bytes32 lThirdTokenTop10Bytes = bytes32(bytes20(lThirdToken)) >> 176;
-                bytes32 lFirstWord = FlagsLib.FLAG_3_HOP_ROUTE | lSecondTokenData | lThirdTokenTop10Bytes;
-
-                // Trim away the first 10 bytes since we only want the last 10 bytes.
-                bytes32 lThirdTokenBottom10Bytes = bytes32(bytes20(lThirdToken) << 80);
-                bytes32 lSecondWord = lThirdTokenBottom10Bytes;
+                (bytes32 lFirstWord, bytes32 lSecondWord) = lSecondToken.pack3HopRoute(lThirdToken);
 
                 // Write two words to storage.
                 assembly {

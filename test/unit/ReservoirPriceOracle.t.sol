@@ -21,7 +21,7 @@ import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
-    using FlagsLib for bytes32;
+    using FlagsLib for *;
     using Bytes32Lib for *;
     using EnumerableSetLib for EnumerableSetLib.AddressSet;
 
@@ -48,7 +48,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         require(lAccesses.length == 1, "incorrect number of accesses");
 
         int256 lDecimalDiff = int256(uint256(IERC20(aToken1).decimals())) - int256(uint256(IERC20(aToken0).decimals()));
-        bytes32 lData = FlagsLib.FLAG_SIMPLE_PRICE.combine(lDecimalDiff) | bytes32(aPrice);
+        bytes32 lData = lDecimalDiff.packSimplePrice(aPrice);
         require(lData.getDecimalDifference() == lDecimalDiff, "decimal diff incorrect");
         require(lData.isSimplePrice(), "flag incorrect");
         vm.store(address(_oracle), lAccesses[0], lData);
@@ -844,7 +844,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // act & assert
         vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
-        uint256[] memory lResults = _oracle.getTimeWeightedAverage(lQueries);
+        _oracle.getTimeWeightedAverage(lQueries);
     }
 
     function testGetLatest(uint32 aFastForward) public {

@@ -33,9 +33,24 @@ library FlagsLib {
     }
 
     // Assumes that aDecimalDifference is between -18 and 18
-    function combine(bytes32 aFlag, int256 aDecimalDifference) internal pure returns (bytes32 rCombined) {
+    // Assumes that aPrice is between 1 and 1e36
+    function packSimplePrice(int256 aDecimalDifference, uint256 aPrice) internal pure returns (bytes32 rPacked) {
         bytes32 lDecimalDifferenceRaw = bytes1(uint8(int8(aDecimalDifference)));
-        rCombined = aFlag | lDecimalDifferenceRaw >> 8;
+        rPacked = FLAG_SIMPLE_PRICE | lDecimalDifferenceRaw >> 8 | bytes32(aPrice);
+    }
+
+    function pack2HopRoute(address aSecondToken) internal pure returns (bytes32 rPacked) {
+        // Move aSecondToken to start on the 2nd byte.
+        rPacked = FLAG_2_HOP_ROUTE | bytes32(bytes20(aSecondToken)) >> 8;
+    }
+
+    function pack3HopRoute(address aSecondToken, address aThirdToken) internal pure returns (bytes32 rFirstWord, bytes32 rSecondWord) {
+        bytes32 lThirdTokenTop10Bytes = bytes32(bytes20(aThirdToken)) >> 176;
+        // Trim away the first 10 bytes since we only want the last 10 bytes.
+        bytes32 lThirdTokenBottom10Bytes = bytes32(bytes20(aThirdToken) << 80);
+
+        rFirstWord = FLAG_3_HOP_ROUTE | bytes32(bytes20(aSecondToken)) >> 8 | lThirdTokenTop10Bytes;
+        rSecondWord = lThirdTokenBottom10Bytes;
     }
 
     function getPrice(bytes32 aData) internal pure returns (uint256 rPrice) {
@@ -48,8 +63,8 @@ library FlagsLib {
     }
 
     function getThirdToken(bytes32 aFirstWord, bytes32 aSecondWord) internal pure returns (address rToken) {
-        bytes32 lFirst10Bytes = (aFirstWord & 0x00000000000000000000000000000000000000000000ffffffffffffffffffff) << 80;
-        bytes32 lLast10Bytes = aSecondWord >> 176;
-        rToken = address(uint160(uint256(lFirst10Bytes | lLast10Bytes)));
+        bytes32 lTop10Bytes = (aFirstWord & 0x00000000000000000000000000000000000000000000ffffffffffffffffffff) << 80;
+        bytes32 lBottom10Bytes = aSecondWord >> 176;
+        rToken = address(uint160(uint256(lTop10Bytes | lBottom10Bytes)));
     }
 }

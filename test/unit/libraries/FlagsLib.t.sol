@@ -9,7 +9,7 @@ contract FlagsLibTest is Test {
     using FlagsLib for bytes32;
     using FlagsLib for int256;
 
-    function testIsCompositeRoute() external {
+    function testIsCompositeRoute() external pure {
         // arrange
         bytes32 lUninitialized = FlagsLib.FLAG_UNINITIALIZED;
         bytes32 l1HopRoute = FlagsLib.FLAG_SIMPLE_PRICE;
@@ -23,7 +23,7 @@ contract FlagsLibTest is Test {
         assertFalse(l1HopRoute.isCompositeRoute());
     }
 
-    function testGetDecimalDifference() external {
+    function testGetDecimalDifference() external pure {
         // arrange
         bytes32 lPositive = hex"0012";
         bytes32 lNegative = hex"00ee";
@@ -35,12 +35,16 @@ contract FlagsLibTest is Test {
         assertEq(lZero.getDecimalDifference(), 0);
     }
 
-    function testCombine(int8 aDiff) external {
+    function testPackSimplePrice(int8 aDiff, uint256 aPrice) external pure {
+        // assume
+        uint256 lPrice = bound(aPrice, 1, 1e36);
+
         // act
-        bytes32 lResult = FlagsLib.FLAG_SIMPLE_PRICE.combine(aDiff);
+        bytes32 lResult = int256(aDiff).packSimplePrice(lPrice);
 
         // assert
-        assertEq(lResult[0], hex"01");
+        assertEq(lResult[0], FlagsLib.FLAG_SIMPLE_PRICE);
         assertEq(lResult[1], bytes1(uint8(aDiff)));
+        assertEq(lResult.getPrice(), lPrice);
     }
 }
