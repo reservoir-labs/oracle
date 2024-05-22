@@ -837,11 +837,9 @@ contract ReservoirPriceOracleTest is BaseTest {
         OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
         lQueries[0] = OracleAverageQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 10, 0);
 
-        // act
+        // act & assert
+        vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
         uint256[] memory lResults = _oracle.getTimeWeightedAverage(lQueries);
-
-        // assert
-        assertEq(lResults[0], 0.010109294811147218e18);
     }
 
     function testGetLatest(uint32 aFastForward) public {

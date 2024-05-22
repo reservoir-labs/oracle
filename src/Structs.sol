@@ -9,6 +9,7 @@ import { Variable } from "src/Enums.sol";
  * Each query computes the average over a window of duration `secs` seconds that ended `ago` seconds ago. For
  * example, the average over the past 30 minutes is computed by settings secs to 1800 and ago to 0. If secs is 1800
  * and ago is 1800 as well, the average between 60 and 30 minutes ago is computed instead.
+ * The address of base is strictly less than the address of quote
  */
 struct OracleAverageQuery {
     Variable variable;

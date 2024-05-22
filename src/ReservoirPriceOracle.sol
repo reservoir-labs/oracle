@@ -186,13 +186,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         OracleAverageQuery memory lQuery;
         for (uint256 i = 0; i < aQueries.length; ++i) {
             lQuery = aQueries[i];
-            (address lToken0, address lToken1) = lQuery.base.sortTokens(lQuery.quote);
-            ReservoirPair lPair = pairs[lToken0][lToken1];
+            ReservoirPair lPair = pairs[lQuery.base][lQuery.quote];
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
             uint256 lResult = lPair.getTimeWeightedAverage(lQuery.variable, lQuery.secs, lQuery.ago, lIndex);
-            rResults[i] = lToken0 == lQuery.base ? lResult : lResult.invertWad();
+            rResults[i] = lResult;
         }
     }
 
