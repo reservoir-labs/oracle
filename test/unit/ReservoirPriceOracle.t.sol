@@ -18,6 +18,7 @@ import {
 } from "src/ReservoirPriceOracle.sol";
 import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
 import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
+import { Constants } from "src/libraries/Constants.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
@@ -1125,5 +1126,14 @@ contract ReservoirPriceOracleTest is BaseTest {
         // act & assert
         vm.expectRevert(OracleErrors.PriceZero.selector);
         _oracle.getQuote(321_321, address(_tokenA), address(_tokenD));
+    }
+
+    function testGetQuote_AmountInTooLarge() external {
+        // arrange
+        uint256 lAmtIn = Constants.MAX_AMOUNT_IN + 1;
+
+        // act & assert
+        vm.expectRevert(OracleErrors.AmountInTooLarge.selector);
+        _oracle.getQuote(lAmtIn, address(_tokenA), address(_tokenB));
     }
 }

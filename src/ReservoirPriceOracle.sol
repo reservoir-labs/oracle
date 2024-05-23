@@ -18,6 +18,7 @@ import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
 import { LibSort } from "lib/solady/src/utils/LibSort.sol";
+import { Constants } from "src/libraries/Constants.sol";
 import { FlagsLib } from "src/libraries/FlagsLib.sol";
 
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
@@ -26,15 +27,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     using FlagsLib for *;
     using QueryProcessor for ReservoirPair;
     using Utils for *;
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////
-    //                                       CONSTANTS                                           //
-    ///////////////////////////////////////////////////////////////////////////////////////////////
-
-    uint256 private constant MAX_DEVIATION_THRESHOLD = 0.1e18; // 10%
-    uint256 private constant MAX_TWAP_PERIOD = 1 hours;
-    uint256 private constant MAX_ROUTE_LENGTH = 4;
-    uint256 private constant WAD = 1e18;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       EVENTS                                              //
@@ -115,20 +107,23 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         (rRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
     }
 
-    /// @notice The latest cached geometric TWAP of token1/token0, where the address of token0 is strictly less than the address of token1
+    /// @notice The latest cached geometric TWAP of token0/token1.
     /// Stored in the form of a 18 decimal fixed point number.
-    /// Supported price range: 1wei to 1e36, due to the need to support inverting price via `Utils.invertWad`
-    /// To obtain the price for token0/token1, calculate the reciprocal using Utils.invertWad()
+    /// Supported price range: 1wei to `Constants.MAX_SUPPORTED_PRICE`.
     /// Only stores prices of simple routes. Does not store prices of composite routes.
-    /// Returns 0 for prices of composite routes
+    /// @param aToken0 Address of the lower token.
+    /// @param aToken1 Address of the higher token.
+    /// @return rPrice The cached price of aToken0/aToken1 for simple routes. Returns 0 for prices of composite routes.
+    /// @return rDecimalDiff The difference in decimals as defined by aToken1.decimals() - aToken0.decimals(). Only valid for simple routes.
     function priceCache(address aToken0, address aToken1) external view returns (uint256 rPrice, int256 rDecimalDiff) {
         (rPrice, rDecimalDiff) = _priceCache(aToken0, aToken1);
     }
 
     /// @notice Updates the TWAP price for all simple routes between `aTokenA` and `aTokenB`. Will also update intermediate routes if the route defined between
-    /// aTokenA and aTokenB is longer than 1 hop
+    /// `aTokenA` and `aTokenB` is longer than 1 hop
     /// However, if the route between aTokenA and aTokenB is composite route (more than 1 hop), no cache entry is written
     /// for priceCache[aTokenA][aTokenB] but instead the prices of its constituent simple routes will be written.
+    /// Reverts if price is 0 or greater than `Constants.MAX_SUPPORTED_PRICE`.
     /// @param aTokenA Address of one of the tokens for the price update. Does not have to be less than address of aTokenB
     /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
     /// @param aRewardRecipient The beneficiary of the reward. Must be able to receive ether. Set to address(0) if not seeking a reward
@@ -274,7 +269,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         view
         returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice)
     {
-        address[] memory lResults = new address[](MAX_ROUTE_LENGTH);
+        address[] memory lResults = new address[](Constants.MAX_ROUTE_LENGTH);
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
         bytes32 lFirstWord;
@@ -360,7 +355,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function _writePriceCache(address aToken0, address aToken1, uint256 aNewPrice) internal {
-        if (aNewPrice == 0 || aNewPrice > 1e36) revert OracleErrors.PriceOutOfRange(aNewPrice);
+        if (aNewPrice == 0 || aNewPrice > Constants.MAX_SUPPORTED_PRICE) revert OracleErrors.PriceOutOfRange(aNewPrice);
 
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
         bytes32 lData;
@@ -379,6 +374,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
         if (aBase == aQuote) return aAmount;
+        if (aAmount > Constants.MAX_AMOUNT_IN) revert OracleErrors.AmountInTooLarge();
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
@@ -416,25 +412,25 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         pure
         returns (uint256 rOut)
     {
-        // formula: baseAmountOut = quoteAmountIn * WAD * baseDecimalScale / baseQuotePrice / quoteDecimalScale
+        // formula: baseAmountOut = quoteAmountIn * Constants.WAD * baseDecimalScale / baseQuotePrice / quoteDecimalScale
         if (aInverse) {
             if (aDecimalDiff > 0) {
-                rOut = aAmountIn.fullMulDiv(WAD, aPrice) / 10 ** uint256(aDecimalDiff);
+                rOut = aAmountIn.fullMulDiv(Constants.WAD, aPrice) / 10 ** uint256(aDecimalDiff);
             } else if (aDecimalDiff < 0) {
-                rOut = aAmountIn.fullMulDiv(WAD * 10 ** uint256(-aDecimalDiff), aPrice);
+                rOut = aAmountIn.fullMulDiv(Constants.WAD * 10 ** uint256(-aDecimalDiff), aPrice);
             }
             // equal decimals
             else {
-                rOut = aAmountIn.fullMulDiv(WAD, aPrice);
+                rOut = aAmountIn.fullMulDiv(Constants.WAD, aPrice);
             }
         } else {
-            // formula: quoteAmountOut = baseAmountIn * baseQuotePrice * quoteDecimalScale / baseDecimalScale / WAD
+            // formula: quoteAmountOut = baseAmountIn * baseQuotePrice * quoteDecimalScale / baseDecimalScale / Constants.WAD
             if (aDecimalDiff > 0) {
-                rOut = aAmountIn.fullMulDiv(aPrice * 10 ** uint256(aDecimalDiff), WAD);
+                rOut = aAmountIn.fullMulDiv(aPrice * 10 ** uint256(aDecimalDiff), Constants.WAD);
             } else if (aDecimalDiff < 0) {
-                rOut = aAmountIn.fullMulDiv(aPrice, 10 ** uint256(-aDecimalDiff) * WAD);
+                rOut = aAmountIn.fullMulDiv(aPrice, 10 ** uint256(-aDecimalDiff) * Constants.WAD);
             } else {
-                rOut = aAmountIn.fullMulDiv(aPrice, WAD);
+                rOut = aAmountIn.fullMulDiv(aPrice, Constants.WAD);
             }
         }
     }
@@ -444,7 +440,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     function updatePriceDeviationThreshold(uint64 aNewThreshold) public onlyOwner {
-        if (aNewThreshold > MAX_DEVIATION_THRESHOLD) {
+        if (aNewThreshold > Constants.MAX_DEVIATION_THRESHOLD) {
             revert OracleErrors.PriceDeviationThresholdTooHigh();
         }
 
@@ -453,7 +449,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function updateTwapPeriod(uint64 aNewPeriod) public onlyOwner {
-        if (aNewPeriod == 0 || aNewPeriod > MAX_TWAP_PERIOD) {
+        if (aNewPeriod == 0 || aNewPeriod > Constants.MAX_TWAP_PERIOD) {
             revert OracleErrors.InvalidTwapPeriod();
         }
         twapPeriod = aNewPeriod;
@@ -490,7 +486,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         if (aToken0 == aToken1) revert OracleErrors.SameToken();
         if (aToken1 < aToken0) revert OracleErrors.TokensUnsorted();
-        if (lRouteLength > MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
+        if (lRouteLength > Constants.MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
         if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
 
         bytes32 lSlot = aToken0.calculateSlot(aToken1);

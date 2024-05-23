@@ -14,6 +14,7 @@ library OracleErrors {
     error UnsupportedTokenDecimals();
 
     // query errors
+    error AmountInTooLarge();
     error BadSecs();
     error BadVariableRequest();
     error InvalidSeconds();
