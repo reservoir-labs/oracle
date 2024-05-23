@@ -42,7 +42,11 @@ library FlagsLib {
         rPacked = FLAG_2_HOP_ROUTE | bytes32(bytes20(aSecondToken)) >> 8;
     }
 
-    function pack3HopRoute(address aSecondToken, address aThirdToken) internal pure returns (bytes32 rFirstWord, bytes32 rSecondWord) {
+    function pack3HopRoute(address aSecondToken, address aThirdToken)
+        internal
+        pure
+        returns (bytes32 rFirstWord, bytes32 rSecondWord)
+    {
         bytes32 lThirdTokenTop10Bytes = bytes32(bytes20(aThirdToken)) >> 176;
         // Trim away the first 10 bytes since we only want the last 10 bytes.
         bytes32 lThirdTokenBottom10Bytes = bytes32(bytes20(aThirdToken) << 80);

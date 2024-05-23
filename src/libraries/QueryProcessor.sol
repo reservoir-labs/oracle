@@ -35,11 +35,7 @@ library QueryProcessor {
     /**
      * @dev Returns the value for `variable` at the indexed sample.
      */
-    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index)
-        internal
-        view
-        returns (uint256)
-    {
+    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index) internal view returns (uint256) {
         Observation memory sample = pair.observation(index);
         if (sample.timestamp == 0) revert OracleErrors.OracleNotInitialized();
 
@@ -179,7 +175,6 @@ library QueryProcessor {
                 // and `next` being the same. In this case, we simply return the accumulator at that point in time.
                 return prev.accumulator(variable);
             }
-
         }
     }
 

@@ -372,8 +372,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
         if (aBase == aQuote) return aAmount;
         if (aAmount > Constants.MAX_AMOUNT_IN) revert OracleErrors.AmountInTooLarge();
-        (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
 
+        (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 

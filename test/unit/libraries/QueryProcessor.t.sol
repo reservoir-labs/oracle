@@ -312,9 +312,7 @@ contract QueryProcessorTest is BaseTest {
         _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, aIndex);
     }
 
-    function testGetInstantValue_NotInitialized_BeyondBufferSize(uint8 aVariable, uint16 aIndex)
-        external
-    {
+    function testGetInstantValue_NotInitialized_BeyondBufferSize(uint8 aVariable, uint16 aIndex) external {
         // assume
         Variable lVar = Variable(bound(aVariable, 0, 1));
         uint16 lIndex = uint16(bound(aIndex, Buffer.SIZE, type(uint16).max));
@@ -325,10 +323,6 @@ contract QueryProcessorTest is BaseTest {
         // act & assert - should revert for all indexes that are beyond the bounds of buffer
         vm.expectRevert(OracleErrors.OracleNotInitialized.selector);
         _queryProcessor.getInstantValue(_pair, lVar, lIndex);
-    }
-
-    function testGetInstantValue_BaseQuoteReversed() external {
-
     }
 
     function testGetPastAccumulator_BufferEmpty(uint8 aVariable) external {
