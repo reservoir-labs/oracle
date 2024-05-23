@@ -833,21 +833,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(lResults[0], 98_918_868_099_219_913_512);
     }
 
-    function testGetTimeWeightedAverage_Inverted() external {
-        // arrange
-        skip(60);
-        _pair.sync();
-        skip(60);
-        _pair.sync();
-        _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
-        OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
-        lQueries[0] = OracleAverageQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 10, 0);
-
-        // act & assert
-        vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
-        _oracle.getTimeWeightedAverage(lQueries);
-    }
-
     function testGetLatest(uint32 aFastForward) public {
         // assume - latest price should always be the same no matter how much time has elapsed
         uint32 lFastForward = uint32(bound(aFastForward, 1, 2 ** 31 - 2));
@@ -863,18 +848,6 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // assert
         assertEq(lLatestPrice, 98_918_868_099_219_913_512);
-    }
-
-    function testGetLatest_Inverted(uint32 aFastForward) external {
-        // arrange
-        testGetLatest(aFastForward);
-
-        // act
-        uint256 lLatestPrice =
-            _oracle.getLatest(OracleLatestQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA)));
-
-        // assert
-        assertEq(lLatestPrice, 0.010109294811147218e18);
     }
 
     function testGetPastAccumulators() external {
@@ -900,32 +873,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(lResults[0], _pair.observation(2).logAccRawPrice);
         assertEq(lResults[1], _pair.observation(1).logAccRawPrice);
         assertEq(lResults[2], _pair.observation(0).logAccRawPrice);
-        vm.stopPrank();
-    }
-
-    function testGetPastAccumulators_Inverted() external {
-        // arrange
-        skip(1 hours);
-        _pair.sync();
-        skip(1 hours);
-        _pair.sync();
-        skip(1 hours);
-        _pair.sync();
-        _oracle.designatePair(address(_tokenA), address(_tokenB), _pair);
-        OracleAccumulatorQuery[] memory lQueries = new OracleAccumulatorQuery[](3);
-        lQueries[0] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 0);
-        lQueries[1] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 1 hours);
-        lQueries[2] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 2 hours);
-
-        // act
-        int256[] memory lResults = _oracle.getPastAccumulators(lQueries);
-
-        // assert
-        assertEq(lResults.length, lQueries.length);
-        vm.startPrank(address(_oracle));
-        assertEq(lResults[0], -_pair.observation(2).logAccRawPrice);
-        assertEq(lResults[1], -_pair.observation(1).logAccRawPrice);
-        assertEq(lResults[2], -_pair.observation(0).logAccRawPrice);
         vm.stopPrank();
     }
 
@@ -969,6 +916,49 @@ contract ReservoirPriceOracleTest is BaseTest {
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                 ERROR CONDITIONS                                          //
     ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    function testGetLatest_Inverted() external {
+        // arrange
+        testGetLatest(5);
+
+        // act & assert
+        vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
+        _oracle.getLatest(OracleLatestQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA)));
+    }
+
+    function testGetPastAccumulators_Inverted() external {
+        // arrange
+        skip(1 hours);
+        _pair.sync();
+        skip(1 hours);
+        _pair.sync();
+        skip(1 hours);
+        _pair.sync();
+        _oracle.designatePair(address(_tokenA), address(_tokenB), _pair);
+        OracleAccumulatorQuery[] memory lQueries = new OracleAccumulatorQuery[](3);
+        lQueries[0] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 0);
+        lQueries[1] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 1 hours);
+        lQueries[2] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 2 hours);
+
+        // act & assert
+        vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
+        _oracle.getPastAccumulators(lQueries);
+    }
+
+    function testGetTimeWeightedAverage_Inverted() external {
+        // arrange
+        skip(60);
+        _pair.sync();
+        skip(60);
+        _pair.sync();
+        _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
+        OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
+        lQueries[0] = OracleAverageQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 10, 0);
+
+        // act & assert
+        vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
+        _oracle.getTimeWeightedAverage(lQueries);
+    }
 
     function testDesignatePair_IncorrectPair() external {
         // act & assert

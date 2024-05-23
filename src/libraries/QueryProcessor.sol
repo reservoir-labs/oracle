@@ -35,7 +35,7 @@ library QueryProcessor {
     /**
      * @dev Returns the value for `variable` at the indexed sample.
      */
-    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index, bool reciprocal)
+    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index)
         internal
         view
         returns (uint256)
@@ -44,14 +44,6 @@ library QueryProcessor {
         if (sample.timestamp == 0) revert OracleErrors.OracleNotInitialized();
 
         int256 rawInstantValue = sample.instant(variable);
-        if (reciprocal) {
-            // SAFETY:
-            //
-            // Cast will not overflow as instant values are within int24. See `Observation.sol`.
-            unchecked {
-                rawInstantValue = -rawInstantValue;
-            }
-        }
         return LogCompression.fromLowResLog(rawInstantValue);
     }
 

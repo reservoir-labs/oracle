@@ -2,8 +2,6 @@
 pragma solidity ^0.8.0;
 
 library FlagsLib {
-    error DECIMAL_DIFF_OUT_OF_RANGE();
-
     bytes32 public constant FLAG_UNINITIALIZED = bytes32(hex"00");
     bytes32 public constant FLAG_SIMPLE_PRICE = bytes32(hex"01");
     bytes32 public constant FLAG_2_HOP_ROUTE = bytes32(hex"02");

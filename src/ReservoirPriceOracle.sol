@@ -192,12 +192,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @inheritdoc IReservoirPriceOracle
     function getLatest(OracleLatestQuery calldata aQuery) external view returns (uint256) {
-        (address lToken0, address lToken1) = aQuery.base.sortTokens(aQuery.quote);
-        ReservoirPair lPair = pairs[lToken0][lToken1];
+        ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
         _validatePair(lPair);
 
         (,,, uint256 lIndex) = lPair.getReserves();
-        uint256 lResult = lPair.getInstantValue(aQuery.variable, lIndex, lToken0 == aQuery.quote);
+        uint256 lResult = lPair.getInstantValue(aQuery.variable, lIndex);
         return lResult;
     }
 
@@ -209,17 +208,15 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     {
         rResults = new int256[](aQueries.length);
 
-        OracleAccumulatorQuery memory query;
+        OracleAccumulatorQuery memory lQuery;
         for (uint256 i = 0; i < aQueries.length; ++i) {
-            query = aQueries[i];
-            (address lToken0, address lToken1) = query.base.sortTokens(query.quote);
-            ReservoirPair lPair = pairs[lToken0][lToken1];
+            lQuery = aQueries[i];
+            ReservoirPair lPair = pairs[lQuery.base][lQuery.quote];
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
-            int256 lAcc = lPair.getPastAccumulator(query.variable, lIndex, query.ago);
-            // safety: negation will not overflow as the accumulator's type is int88
-            rResults[i] = lToken0 == query.base ? lAcc : -lAcc;
+            int256 lAcc = lPair.getPastAccumulator(lQuery.variable, lIndex, lQuery.ago);
+            rResults[i] = lAcc;
         }
     }
 
@@ -336,7 +333,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    // performs an SLOAD to load the simple price
+    // performs an SLOAD to load 1 word which contains the simple price and decimal difference
     function _priceCache(address aToken0, address aToken1)
         internal
         view
@@ -406,7 +403,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    /// @dev aPrice cannot be 0, as checked by _getQuote
+    /// @dev aPrice assumed to be > 0, as checked by _getQuote
     function _calcAmtOut(uint256 aAmountIn, uint256 aPrice, int256 aDecimalDiff, bool aInverse)
         internal
         pure

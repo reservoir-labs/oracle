@@ -4,12 +4,12 @@ pragma solidity ^0.8.0;
 import { QueryProcessor, ReservoirPair, Variable, Observation } from "src/libraries/QueryProcessor.sol";
 
 contract QueryProcessorWrapper {
-    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index, bool reciprocal)
+    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index)
         external
         view
         returns (uint256)
     {
-        return QueryProcessor.getInstantValue(pair, variable, index, reciprocal);
+        return QueryProcessor.getInstantValue(pair, variable, index);
     }
 
     function getTimeWeightedAverage(

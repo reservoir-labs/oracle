@@ -45,8 +45,8 @@ contract QueryProcessorTest is BaseTest {
         _pair.swap(-105e18, true, address(this), "");
 
         // act
-        uint256 lInstantRawPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, 0, false);
-        uint256 lInstantClampedPrice = _queryProcessor.getInstantValue(_pair, Variable.CLAMPED_PRICE, 0, false);
+        uint256 lInstantRawPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, 0);
+        uint256 lInstantClampedPrice = _queryProcessor.getInstantValue(_pair, Variable.CLAMPED_PRICE, 0);
 
         // assert - instant price should be the new price after swap, not the price before swap
         assertApproxEqRel(lInstantRawPrice, 100e18, 0.01e18);
@@ -87,7 +87,7 @@ contract QueryProcessorTest is BaseTest {
         // assert
         // as it is hard to calc the exact average price given so many fuzz parameters, we just assert that the price should be within a range
         uint256 lStartingPrice = 98.9223e18;
-        uint256 lEndingPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, lLatestIndex, false);
+        uint256 lEndingPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, lLatestIndex);
         assertLt(lAveragePrice, lStartingPrice);
         assertGt(lAveragePrice, lEndingPrice);
     }
@@ -309,10 +309,10 @@ contract QueryProcessorTest is BaseTest {
     function testGetInstantValue_NotInitialized(uint256 aIndex) external {
         // act & assert
         vm.expectRevert(OracleErrors.OracleNotInitialized.selector);
-        _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, aIndex, false);
+        _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, aIndex);
     }
 
-    function testGetInstantValue_NotInitialized_BeyondBufferSize(uint8 aVariable, uint16 aIndex, bool aReciprocal)
+    function testGetInstantValue_NotInitialized_BeyondBufferSize(uint8 aVariable, uint16 aIndex)
         external
     {
         // assume
@@ -324,7 +324,11 @@ contract QueryProcessorTest is BaseTest {
 
         // act & assert - should revert for all indexes that are beyond the bounds of buffer
         vm.expectRevert(OracleErrors.OracleNotInitialized.selector);
-        _queryProcessor.getInstantValue(_pair, lVar, lIndex, aReciprocal);
+        _queryProcessor.getInstantValue(_pair, lVar, lIndex);
+    }
+
+    function testGetInstantValue_BaseQuoteReversed() external {
+
     }
 
     function testGetPastAccumulator_BufferEmpty(uint8 aVariable) external {
