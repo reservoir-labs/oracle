@@ -59,6 +59,7 @@ library QueryProcessor {
         //
         // `getPastAccumulator` reverts for any `ago`` greater than 32 bits anyway (i.e. greater than the current block.timestamp till year 2106)
         // So if either `ago` or `ago + secs` is larger than 32 bits, it will revert
+        // `endAccumulator` and `beginAccumulators` themselves will not overflow/underflow until at least after year 2106. So the subtraction will not underflow as well.
         // Therefore it is safe to use unchecked here
         unchecked {
             int256 beginAccumulator = getPastAccumulator(pair, variable, latestIndex, ago + secs);
