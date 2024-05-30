@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
 import { BaseTest, console2, ReservoirPair, MintableERC20 } from "test/__fixtures/BaseTest.t.sol";

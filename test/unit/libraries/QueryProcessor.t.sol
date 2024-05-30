@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
 import { BaseTest, FactoryStoreLib, GenericFactory } from "test/__fixtures/BaseTest.t.sol";
@@ -25,6 +25,35 @@ contract QueryProcessorTest is BaseTest {
             skip(aBlockTime);
             _pair.sync();
         }
+    }
+
+    function _writeObservation(
+        ReservoirPair aPair,
+        uint256 aIndex,
+        int24 aLogInstantRawPrice,
+        int24 aLogInstantClampedPrice,
+        int88 aLogAccRawPrice,
+        int88 aLogAccClampedPrice,
+        uint32 aTime
+    ) internal {
+        require(aTime < 2 ** 31, "TIMESTAMP TOO BIG");
+        bytes32 lEncoded = bytes32(
+            bytes.concat(
+                bytes4(aTime),
+                bytes11(uint88(aLogAccClampedPrice)),
+                bytes11(uint88(aLogAccRawPrice)),
+                bytes3(uint24(aLogInstantClampedPrice)),
+                bytes3(uint24(aLogInstantRawPrice))
+            )
+        );
+
+        vm.prank(address(_queryProcessor));
+        vm.record();
+        aPair.observation(aIndex);
+        (bytes32[] memory lAccesses,) = vm.accesses(address(aPair));
+        require(lAccesses.length == 2, "invalid number of accesses");
+
+        vm.store(address(aPair), lAccesses[1], lEncoded);
     }
 
     modifier setAccumulatorPositive(bool aIsPositive) {
@@ -90,6 +119,30 @@ contract QueryProcessorTest is BaseTest {
         uint256 lEndingPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, lLatestIndex);
         assertLt(lAveragePrice, lStartingPrice);
         assertGt(lAveragePrice, lEndingPrice);
+    }
+
+    function testGetTimeWeightedAverage_AccumulatorOverflow() external {
+        // arrange
+        uint256 lSecs = 600; // 10 minutes
+        skip(10);
+        _pair.sync(); // write first observation at index 0
+        uint32 lNow = uint32(block.timestamp);
+        _writeObservation(_pair, 0, 0, 0, type(int88).max, type(int88).max, lNow);
+
+        skip(lSecs);
+        _pair.sync(); // write second observation at index 1
+        (,,, uint16 lLatestIndex) = _pair.getReserves();
+        // sanity
+        assertEq(lLatestIndex, 1);
+        lNow = uint32(block.timestamp);
+        _writeObservation(_pair, 1, 0, 0, type(int88).min + 3000, type(int88).min + 3000, lNow);
+
+        // act
+        uint256 lAgo = 0;
+        uint256 lResult = _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, lSecs, lAgo, lLatestIndex);
+
+        // assert6
+        assertEq(lResult, 0);
     }
 
     function testGetPastAccumulator_ExactMatch(
