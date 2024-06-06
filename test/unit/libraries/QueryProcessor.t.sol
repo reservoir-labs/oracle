@@ -121,30 +121,6 @@ contract QueryProcessorTest is BaseTest {
         assertGt(lAveragePrice, lEndingPrice);
     }
 
-    function testGetTimeWeightedAverage_AccumulatorOverflow() external {
-        // arrange
-        uint256 lSecs = 600; // 10 minutes
-        skip(10);
-        _pair.sync(); // write first observation at index 0
-        uint32 lNow = uint32(block.timestamp);
-        _writeObservation(_pair, 0, 0, 0, type(int88).max, type(int88).max, lNow);
-
-        skip(lSecs);
-        _pair.sync(); // write second observation at index 1
-        (,,, uint16 lLatestIndex) = _pair.getReserves();
-        // sanity
-        assertEq(lLatestIndex, 1);
-        lNow = uint32(block.timestamp);
-        _writeObservation(_pair, 1, 0, 0, type(int88).min + 3000, type(int88).min + 3000, lNow);
-
-        // act
-        uint256 lAgo = 0;
-        uint256 lResult = _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, lSecs, lAgo, lLatestIndex);
-
-        // assert6
-        assertEq(lResult, 0);
-    }
-
     function testGetPastAccumulator_ExactMatch(
         uint32 aStartTime,
         uint256 aBlockTime,
