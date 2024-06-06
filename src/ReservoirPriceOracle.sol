@@ -32,6 +32,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
+    event FallbackOracleSet(address fallbackOracle);
     event PriceDeviationThreshold(uint256 newThreshold);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
@@ -41,6 +42,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    /// @notice The PriceOracle to call if this router is not configured for base/quote.
+    /// @dev If `address(0)` then there is no fallback.
+    address public fallbackOracle;
 
     /// @notice percentage change greater than which, a price update may result in a reward payout of native tokens,
     /// subject to availability of rewards.
@@ -83,7 +88,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @inheritdoc IPriceOracle
     function getQuote(uint256 aAmount, address aBase, address aQuote) external view returns (uint256 rOut) {
-        rOut = _getQuote(aAmount, aBase, aQuote);
+        rOut = _getQuote(aAmount, aBase, aQuote, false);
     }
 
     /// @inheritdoc IPriceOracle
@@ -92,7 +97,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         view
         returns (uint256 rBidOut, uint256 rAskOut)
     {
-        uint256 lResult = _getQuote(aAmount, aBase, aQuote);
+        uint256 lResult = _getQuote(aAmount, aBase, aQuote, false);
         (rBidOut, rAskOut) = (lResult, lResult);
     }
 
@@ -370,7 +375,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
+    function _getQuote(uint256 aAmount, address aBase, address aQuote, bool isGetQuotes)
+        internal
+        view
+        returns (uint256 rOut)
+    {
         if (aBase == aQuote) return aAmount;
         if (aAmount > Constants.MAX_AMOUNT_IN) revert OracleErrors.AmountInTooLarge();
 
@@ -378,8 +387,21 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
+        // route does not exist on our oracle, attempt querying the fallback
         if (lRoute.length == 0) {
-            revert OracleErrors.NoPath();
+            if (isGetQuotes) {
+                // what is fallbackOracle is address(0)? What will happen? need to test
+                try IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote) returns (uint256 lOut) { }
+                catch {
+                    revert OracleErrors.NoPath();
+                }
+            } else {
+                try IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote) returns (uint256 lOut) {
+                    return lOut;
+                } catch {
+                    revert OracleErrors.NoPath();
+                }
+            }
         } else if (lRoute.length == 2) {
             if (lPrice == 0) revert OracleErrors.PriceZero();
             rOut = _calcAmtOut(aAmount, lPrice, lDecimalDiff, lRoute[0] != aBase);
@@ -436,6 +458,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                   ADMIN FUNCTIONS                                         //
     ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    function setFallbackOracle(address aFallbackOracle) public onlyOwner {
+        fallbackOracle = aFallbackOracle;
+        emit FallbackOracleSet(aFallbackOracle);
+    }
 
     function updatePriceDeviationThreshold(uint64 aNewThreshold) public onlyOwner {
         if (aNewThreshold > Constants.MAX_DEVIATION_THRESHOLD) {
