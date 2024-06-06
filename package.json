@@ -57,8 +57,8 @@
     "submodule:reset": "git submodule update --recursive",
     "test": "npm run test:unit",
     "test:all": "script/coverage_patch_deployer.sh && npm run test:unit && npm run test:integration",
-    "test:integration": "export FOUNDRY_PROFILE=integration && script/coverage_patch_deployer.sh && forge test ",
-    "test:unit": "script/coverage_patch_deployer.sh && forge test"
+    "test:integration": "export FOUNDRY_PROFILE=integration && forge test ",
+    "test:unit": "forge test"
   },
   "devDependencies": {
     "@proxima-oss/eslint-config": "6.0.1",
