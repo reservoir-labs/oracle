@@ -17,9 +17,8 @@ import { LogCompression } from "amm-core/libraries/LogCompression.sol";
 import { Buffer } from "amm-core/libraries/Buffer.sol";
 import { ReservoirPair, Observation } from "amm-core/ReservoirPair.sol";
 
-import { Variable } from "src/interfaces/IReservoirPriceOracle.sol";
 import { OracleErrors } from "src/libraries/OracleErrors.sol";
-import { Samples } from "src/libraries/Samples.sol";
+import { Samples, Variable } from "src/libraries/Samples.sol";
 
 /**
  * @dev Auxiliary library for PoolPriceOracle, offloading most of the query code to reduce bytecode size by using this
