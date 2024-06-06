@@ -145,7 +145,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
             lQueries[i] = OracleAverageQuery(
-                PriceType.RAW_PRICE,
+                priceType,
                 lToken0,
                 lToken1,
                 twapPeriod,
