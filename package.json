@@ -62,6 +62,7 @@
   },
   "devDependencies": {
     "@proxima-oss/eslint-config": "6.0.1",
+    "markdownlint": "0.34.0",
     "markdownlint-cli": "0.31.1",
     "prettier": "2.6.2",
     "solhint": "5.0.1",
