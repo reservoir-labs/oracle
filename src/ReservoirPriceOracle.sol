@@ -88,7 +88,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @inheritdoc IPriceOracle
     function getQuote(uint256 aAmount, address aBase, address aQuote) external view returns (uint256 rOut) {
-        (rOut, ) = _getQuotes(aAmount, aBase, aQuote, false);
+        (rOut,) = _getQuotes(aAmount, aBase, aQuote, false);
     }
 
     /// @inheritdoc IPriceOracle
@@ -388,16 +388,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         // route does not exist on our oracle, attempt querying the fallback
         if (lRoute.length == 0) {
-            if (fallbackOracle == address(0)) {
-                revert OracleErrors.NoPath();
-            }
+            if (fallbackOracle == address(0)) revert OracleErrors.NoPath();
 
             // We do not catch errors here so the fallback oracle will revert if it doesn't support the query.
-            if (isGetQuotes) {
-                (rBidOut, rAskOut) = IPriceOracle(fallbackOracle).getQuotes(aAmount, aBase, aQuote);
-            } else {
-                rBidOut = rAskOut = IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote);
-            }
+            if (isGetQuotes) (rBidOut, rAskOut) = IPriceOracle(fallbackOracle).getQuotes(aAmount, aBase, aQuote);
+            else rBidOut = rAskOut = IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote);
         } else if (lRoute.length == 2) {
             if (lPrice == 0) revert OracleErrors.PriceZero();
             rBidOut = rAskOut = _calcAmtOut(aAmount, lPrice, lDecimalDiff, lRoute[0] != aBase);
