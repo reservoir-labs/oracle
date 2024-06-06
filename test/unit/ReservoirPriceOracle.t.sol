@@ -1120,7 +1120,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updateRewardGasAmount(111);
     }
 
-    function testGetQuote_NoPath() external {
+    function testGetQuote_NoFallbackOracle() external {
         // act & assert
         vm.expectRevert(OracleErrors.NoPath.selector);
         _oracle.getQuote(123, address(123), address(456));

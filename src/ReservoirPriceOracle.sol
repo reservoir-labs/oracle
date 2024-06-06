@@ -88,7 +88,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @inheritdoc IPriceOracle
     function getQuote(uint256 aAmount, address aBase, address aQuote) external view returns (uint256 rOut) {
-        rOut = _getQuote(aAmount, aBase, aQuote, false);
+        (rOut, ) = _getQuotes(aAmount, aBase, aQuote, false);
     }
 
     /// @inheritdoc IPriceOracle
@@ -97,8 +97,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         view
         returns (uint256 rBidOut, uint256 rAskOut)
     {
-        uint256 lResult = _getQuote(aAmount, aBase, aQuote, false);
-        (rBidOut, rAskOut) = (lResult, lResult);
+        (rBidOut, rAskOut) = _getQuotes(aAmount, aBase, aQuote, true);
     }
 
     // price update related functions
@@ -375,12 +374,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _getQuote(uint256 aAmount, address aBase, address aQuote, bool isGetQuotes)
+    function _getQuotes(uint256 aAmount, address aBase, address aQuote, bool isGetQuotes)
         internal
         view
-        returns (uint256 rOut)
+        returns (uint256 rBidOut, uint256 rAskOut)
     {
-        if (aBase == aQuote) return aAmount;
+        if (aBase == aQuote) return (aAmount, aAmount);
         if (aAmount > Constants.MAX_AMOUNT_IN) revert OracleErrors.AmountInTooLarge();
 
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
@@ -389,22 +388,19 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         // route does not exist on our oracle, attempt querying the fallback
         if (lRoute.length == 0) {
+            if (fallbackOracle == address(0)) {
+                revert OracleErrors.NoPath();
+            }
+
+            // We do not catch errors here so the fallback oracle will revert if it doesn't support the query.
             if (isGetQuotes) {
-                // what is fallbackOracle is address(0)? What will happen? need to test
-                try IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote) returns (uint256 lOut) { }
-                catch {
-                    revert OracleErrors.NoPath();
-                }
+                (rBidOut, rAskOut) = IPriceOracle(fallbackOracle).getQuotes(aAmount, aBase, aQuote);
             } else {
-                try IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote) returns (uint256 lOut) {
-                    return lOut;
-                } catch {
-                    revert OracleErrors.NoPath();
-                }
+                rBidOut = rAskOut = IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote);
             }
         } else if (lRoute.length == 2) {
             if (lPrice == 0) revert OracleErrors.PriceZero();
-            rOut = _calcAmtOut(aAmount, lPrice, lDecimalDiff, lRoute[0] != aBase);
+            rBidOut = rAskOut = _calcAmtOut(aAmount, lPrice, lDecimalDiff, lRoute[0] != aBase);
         }
         // for composite route, read simple prices to derive composite price
         else {
@@ -422,7 +418,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 if (lPrice == 0) revert OracleErrors.PriceZero();
                 lIntermediateAmount = _calcAmtOut(lIntermediateAmount, lPrice, lDecimalDiff, lRoute[i] != lLowerToken);
             }
-            rOut = lIntermediateAmount;
+            rBidOut = rAskOut = lIntermediateAmount;
         }
     }
 
