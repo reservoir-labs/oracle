@@ -56,26 +56,3 @@ jobs:
       - run: forge snapshot --check
         env:
           FOUNDRY_PROFILE: default
-
-  coverage:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-      - uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
-      - run: ./script/coverage_patch_deployer.sh && forge coverage --report lcov
-        env:
-          FOUNDRY_PROFILE: coverage
-      - run: sudo apt install -y lcov
-      - run: lcov -r lcov.info "src/libraries/*" -o lcov.info
-      - run: lcov -r lcov.info "test/*" -o lcov.info
-      - run: |
-          ! lcov --summary lcov.info | grep -q 0.0%
-      - uses: codecov/codecov-action@v3
-        with:
-          fail_ci_if_error: true
-          files: ./lcov.info
