@@ -1021,6 +1021,12 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updatePrice(address(_tokenB), address(_tokenC), address(0));
     }
 
+    function setPriceType() external {
+        vm.prank(address(123));
+        vm.expectRevert("UNAUTHORIZED");
+        _oracle.setPriceType(PriceType.RAW_PRICE);
+    }
+
     function testSetRoute_SameToken() external {
         // arrange
         address lToken0 = address(0x1);

@@ -36,11 +36,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
     event Price(address token0, address token1, uint256 price);
+    event SetPriceType(PriceType priceType);
     event TwapPeriod(uint256 newPeriod);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    /// @dev the following 4 storage variables take up 1 storage slot
 
     /// @notice percentage change greater than which, a price update may result in a reward payout of native tokens,
     /// subject to availability of rewards.
@@ -54,6 +57,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @notice TWAP period (in seconds) for querying the oracle
     uint64 public twapPeriod;
 
+    /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
+    PriceType priceType;
+
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
 
@@ -61,10 +67,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     //                                CONSTRUCTOR, FALLBACKS                                     //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    constructor(uint64 aThreshold, uint64 aTwapPeriod, uint64 aMultiplier) {
+    constructor(uint64 aThreshold, uint64 aTwapPeriod, uint64 aMultiplier, PriceType aType) {
         updatePriceDeviationThreshold(aThreshold);
         updateTwapPeriod(aTwapPeriod);
         updateRewardGasAmount(aMultiplier);
+        setPriceType(aType);
     }
 
     /// @dev contract will hold native tokens to be distributed as gas bounty for updating the prices
@@ -473,6 +480,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         delete pairs[aToken0][aToken1];
         emit DesignatePair(aToken0, aToken1, ReservoirPair(address(0)));
+    }
+
+    function setPriceType(PriceType aType) public onlyOwner {
+        priceType = aType;
+        emit SetPriceType(aType);
     }
 
     /// @notice Sets the price route between aToken0 and aToken1, and also intermediate routes if previously undefined
