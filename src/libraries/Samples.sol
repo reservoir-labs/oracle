@@ -16,7 +16,7 @@ pragma solidity ^0.8.0;
 import { Observation } from "amm-core/ReservoirPair.sol";
 
 import { Variable } from "src/Enums.sol";
-import { BadVariableRequest } from "src/Errors.sol";
+import { OracleErrors } from "src/libraries/OracleErrors.sol";
 
 library Samples {
     /**
@@ -28,7 +28,7 @@ library Samples {
         } else if (variable == Variable.CLAMPED_PRICE) {
             return sample.logInstantClampedPrice;
         } else {
-            revert BadVariableRequest();
+            revert OracleErrors.BadVariableRequest();
         }
     }
 
@@ -41,7 +41,7 @@ library Samples {
         } else if (variable == Variable.CLAMPED_PRICE) {
             return sample.logAccClampedPrice;
         } else {
-            revert BadVariableRequest();
+            revert OracleErrors.BadVariableRequest();
         }
     }
 }

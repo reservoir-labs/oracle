@@ -1,5 +1,5 @@
 [profile.default]
-solc = "0.8.23"
+solc = "0.8.26"
 #via_ir = true
 bytecode_hash = "ipfs"
 optimizer_runs = 1_000_000
@@ -8,10 +8,10 @@ remappings = [
     "amm-core/=lib/amm-core/src/"
 ]
 match_path = "test/unit/*.sol"
+block_base_fee_per_gas = 10_000_000  # set to arbitrum's base fee of 0.01 gwei
 verbosity = 3
 fs_permissions = [
-    { access = "write", path = "./script/optimized-deployer-meta" },
-    { access = "write", path = "./script/unoptimized-deployer-meta" },
+    { access = "read", path = "./out" }
 ]
 ignored_error_codes = []
 
