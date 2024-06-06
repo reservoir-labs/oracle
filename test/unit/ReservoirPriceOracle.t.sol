@@ -68,6 +68,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         _addressSet.add(address(_tokenD));
     }
 
+    // solhint-disable-next-line no-empty-blocks
     receive() external payable { } // required to receive reward payout from priceCache
 
     function setUp() external {

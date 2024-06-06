@@ -15,7 +15,6 @@
 pragma solidity ^0.8.0;
 
 import { OracleAverageQuery, OracleLatestQuery, OracleAccumulatorQuery } from "src/Structs.sol";
-import { Variable } from "src/Enums.sol";
 
 /**
  * @dev Interface for querying historical data from a Pool that can be used as a Price Oracle.

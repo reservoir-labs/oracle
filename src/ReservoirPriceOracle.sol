@@ -8,11 +8,10 @@ import {
     IReservoirPriceOracle,
     OracleAverageQuery,
     OracleLatestQuery,
-    OracleAccumulatorQuery,
-    Variable
+    OracleAccumulatorQuery
 } from "src/interfaces/IReservoirPriceOracle.sol";
 import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
-import { QueryProcessor, ReservoirPair, Buffer } from "src/libraries/QueryProcessor.sol";
+import { QueryProcessor, ReservoirPair, Buffer, Variable } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
@@ -255,7 +254,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         if (lPayoutAmt <= address(this).balance) {
             payable(aRecipient).transfer(lPayoutAmt);
-        } else { } // do nothing if lPayoutAmt is greater than the balance
+        }
+        // do nothing if lPayoutAmt is greater than the balance
     }
 
     /// @return rRoute The route to determine the price between aToken0 and aToken1
@@ -306,6 +306,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             }
         }
         // no route
+        // solhint-disable-next-line no-empty-blocks
         else if (lFirstWord.isUninitialized()) { }
 
         rRoute = new address[](lRouteLength);
