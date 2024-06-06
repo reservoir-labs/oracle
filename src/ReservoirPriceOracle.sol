@@ -58,7 +58,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     uint64 public twapPeriod;
 
     /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
-    PriceType priceType;
+    PriceType public priceType;
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
