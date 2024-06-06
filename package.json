@@ -1,0 +1,70 @@
+{
+  "name": "oracle",
+  "version": "0.1.0",
+  "description": "Oracle Smart Contracts for querying prices from the Reservoir AMM",
+  "eslintConfig": {
+    "parserOptions": {
+      "sourceType": "module"
+    },
+    "extends": [
+      "@proxima-oss/eslint-config/style/standard"
+    ],
+    "overrides": [
+      {
+        "files": [
+          "*"
+        ],
+        "rules": {
+          "brace-style": [
+            "off"
+          ]
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "forge build",
+    "ci": "forge build --force && npm run lint:check && npm run test:unit && npm run gas:check && npm run slither:check",
+    "clean": "forge clean",
+    "coverage": "export FOUNDRY_PROFILE=coverage && script/coverage_patch_deployer.sh && forge coverage --report lcov",
+    "eslint": "npm run eslint:check",
+    "eslint:check": "eslint scripts",
+    "eslint:fix": "eslint scripts --fix",
+    "gas:snapshot": "forge snapshot",
+    "gas:check": "forge snapshot --check",
+    "lint": "npm run lint:check",
+    "lint:check": "npm run solhint:check && npm run prettier:check && npm run mdlint:check",
+    "lint:fix": "npm run solhint:fix && npm run prettier:fix && npm run eslint:fix && npm run mdlint:fix",
+    "mdlint": "npm run mdlint:check",
+    "mdlint:check": "markdownlint --config .markdownlint.yaml .",
+    "mdlint:fix": "markdownlint --config .markdownlint.yaml . --fix",
+    "myth": "npm run myth:check",
+    "myth:check": "myth analyze src/**/*.sol --solc-json .mythril.json --execution-timeout 30",
+    "myth:deep-check": "myth analyze src/**/*.sol --solc-json .mythril.json --execution-timeout 3600 --parallel-solving",
+    "prettier": "npm run prettier:check",
+    "prettier:check": "prettier --check '**/*.json'",
+    "prettier:fix": "prettier --write '**/*.json'",
+    "prettier:list": "prettier --list-different '**/*.json'",
+    "reinstall": "rm -rf node_modules package-lock.json && npm install",
+    "slither": "npm run slither:check",
+    "slither:check": "slither .",
+    "slither:triage": "slither . --triage-mode",
+    "slither:report": "slither . --checklist --markdown-root https://github.com/proximacapital/vault/blob/$(git rev-parse --verify HEAD)/ > slither-report.md",
+    "solhint": "npm run solhint:check",
+    "solhint:check": "solhint --config src/.solhint.json 'src/**/*.sol' && solhint --config test/.solhint.json 'test/**/*.sol'",
+    "solhint:fix": "solhint --config src/.solhint.json 'src/**/*.sol' --fix && solhint --config test/.solhint.json 'test/**/*.sol' --fix",
+    "submodule:check": "cd lib && find . -mindepth 1 -maxdepth 1 -type d -exec bash -c 'cd \"{}\" && pwd && ../../scripts/git-master-diff.sh && echo' \\;",
+    "submodule:reset": "git submodule update --recursive",
+    "test": "npm run test:unit",
+    "test:all": "script/coverage_patch_deployer.sh && npm run test:unit && npm run test:integration",
+    "test:integration": "export FOUNDRY_PROFILE=integration && script/coverage_patch_deployer.sh && forge test ",
+    "test:unit": "script/coverage_patch_deployer.sh && forge test"
+  },
+  "devDependencies": {
+    "@proxima-oss/eslint-config": "6.0.1",
+    "markdownlint-cli": "0.31.1",
+    "prettier": "2.6.2",
+    "ts-node": "10.8.1",
+    "solhint": "3.3.8"
+  }
+}

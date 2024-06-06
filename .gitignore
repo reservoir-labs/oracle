@@ -1,6 +1,6 @@
 # Compiler files
-cache/
-out/
+/cache
+/out
 
 # Ignores development broadcast logs
 !/broadcast
@@ -12,3 +12,13 @@ docs/
 
 # Dotenv file
 .env
+
+# slither 
+/slither-report.md
+
+# typechain
+/typings
+
+# node 
+/node_modules
+
