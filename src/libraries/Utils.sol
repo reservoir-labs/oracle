@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { OracleErrors } from "src/libraries/OracleErrors.sol";
-
 library Utils {
     /// @dev Square of 1e18 (WAD)
     uint256 internal constant WAD_SQUARED = 1e36;
