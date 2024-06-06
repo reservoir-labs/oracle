@@ -23,7 +23,7 @@
     "build": "forge build",
     "ci": "forge build --force && npm run lint:check && npm run test:unit && npm run gas:check && npm run slither:check",
     "clean": "forge clean",
-    "coverage": "export FOUNDRY_PROFILE=coverage && script/coverage_patch_deployer.sh && forge coverage --report lcov",
+    "coverage": "export FOUNDRY_PROFILE=coverage && forge coverage --report lcov",
     "eslint": "npm run eslint:check",
     "eslint:check": "eslint scripts",
     "eslint:fix": "eslint scripts --fix",
@@ -53,7 +53,7 @@
     "submodule:check": "cd lib && find . -mindepth 1 -maxdepth 1 -type d -exec bash -c 'cd \"{}\" && pwd && ../../scripts/git-master-diff.sh && echo' \\;",
     "submodule:reset": "git submodule update --recursive",
     "test": "npm run test:unit",
-    "test:all": "script/coverage_patch_deployer.sh && npm run test:unit && npm run test:integration",
+    "test:all": "npm run test:unit && npm run test:integration",
     "test:integration": "export FOUNDRY_PROFILE=integration && forge test ",
     "test:unit": "forge test"
   },
