@@ -11,7 +11,7 @@ import {
     OracleAccumulatorQuery
 } from "src/interfaces/IReservoirPriceOracle.sol";
 import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
-import { QueryProcessor, ReservoirPair, Buffer, Variable } from "src/libraries/QueryProcessor.sol";
+import { QueryProcessor, ReservoirPair, Buffer, PriceType } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
@@ -138,7 +138,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
             lQueries[i] = OracleAverageQuery(
-                Variable.RAW_PRICE,
+                PriceType.RAW_PRICE,
                 lToken0,
                 lToken1,
                 twapPeriod,
@@ -184,7 +184,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
-            uint256 lResult = lPair.getTimeWeightedAverage(lQuery.variable, lQuery.secs, lQuery.ago, lIndex);
+            uint256 lResult = lPair.getTimeWeightedAverage(lQuery.priceType, lQuery.secs, lQuery.ago, lIndex);
             rResults[i] = lResult;
         }
     }
@@ -195,7 +195,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         _validatePair(lPair);
 
         (,,, uint256 lIndex) = lPair.getReserves();
-        uint256 lResult = lPair.getInstantValue(aQuery.variable, lIndex);
+        uint256 lResult = lPair.getInstantValue(aQuery.priceType, lIndex);
         return lResult;
     }
 
@@ -214,7 +214,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
-            int256 lAcc = lPair.getPastAccumulator(lQuery.variable, lIndex, lQuery.ago);
+            int256 lAcc = lPair.getPastAccumulator(lQuery.priceType, lIndex, lQuery.ago);
             rResults[i] = lAcc;
         }
     }

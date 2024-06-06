@@ -37,9 +37,9 @@ interface IReservoirPriceOracle {
         returns (uint256[] memory results);
 
     /**
-     * @dev Returns latest sample of `variable`. Prices are represented as 18 decimal fixed point values.
+     * @dev Returns latest sample of `priceType`. Prices are represented as 18 decimal fixed point values.
      */
-    function getLatest(OracleLatestQuery calldata variable) external view returns (uint256);
+    function getLatest(OracleLatestQuery calldata priceType) external view returns (uint256);
 
     /**
      * @dev Returns largest time window that can be safely queried, where 'safely' means the Oracle is guaranteed to be

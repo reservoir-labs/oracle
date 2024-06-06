@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-import { Variable } from "src/Enums.sol";
+import { PriceType } from "src/Enums.sol";
 
 /**
  * @dev Information for a Time Weighted Average query.
@@ -12,7 +12,7 @@ import { Variable } from "src/Enums.sol";
  * The address of `base` is strictly less than the address of `quote`
  */
 struct OracleAverageQuery {
-    Variable variable;
+    PriceType priceType;
     address base;
     address quote;
     uint256 secs;
@@ -20,13 +20,13 @@ struct OracleAverageQuery {
 }
 
 /**
- * @dev Information for a query for the latest variable
+ * @dev Information for a query for the latest priceType
  *
- * Each query computes the latest instantaneous variable.
+ * Each query computes the latest instantaneous priceType.
  * The address of `base` is strictly less than the address of `quote`
  */
 struct OracleLatestQuery {
-    Variable variable;
+    PriceType priceType;
     address base;
     address quote;
 }
@@ -38,7 +38,7 @@ struct OracleLatestQuery {
  * The address of `base` is strictly less than the address of `quote`
  */
 struct OracleAccumulatorQuery {
-    Variable variable;
+    PriceType priceType;
     address base;
     address quote;
     uint256 ago;

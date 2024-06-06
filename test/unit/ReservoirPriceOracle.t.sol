@@ -6,7 +6,7 @@ import { BaseTest, console2, ReservoirPair, MintableERC20 } from "test/__fixture
 import { Utils } from "src/libraries/Utils.sol";
 import {
     Buffer,
-    Variable,
+    PriceType,
     OracleErrors,
     OracleLatestQuery,
     OracleAccumulatorQuery,
@@ -825,7 +825,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         _pair.sync();
         _oracle.designatePair(address(_tokenA), address(_tokenB), _pair);
         OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
-        lQueries[0] = OracleAverageQuery(Variable.RAW_PRICE, address(_tokenA), address(_tokenB), 10, 0);
+        lQueries[0] = OracleAverageQuery(PriceType.RAW_PRICE, address(_tokenA), address(_tokenB), 10, 0);
 
         // act
         uint256[] memory lResults = _oracle.getTimeWeightedAverage(lQueries);
@@ -845,7 +845,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // act
         uint256 lLatestPrice =
-            _oracle.getLatest(OracleLatestQuery(Variable.RAW_PRICE, address(_tokenA), address(_tokenB)));
+            _oracle.getLatest(OracleLatestQuery(PriceType.RAW_PRICE, address(_tokenA), address(_tokenB)));
 
         // assert
         assertEq(lLatestPrice, 98_918_868_099_219_913_512);
@@ -861,9 +861,9 @@ contract ReservoirPriceOracleTest is BaseTest {
         _pair.sync();
         _oracle.designatePair(address(_tokenA), address(_tokenB), _pair);
         OracleAccumulatorQuery[] memory lQueries = new OracleAccumulatorQuery[](3);
-        lQueries[0] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenA), address(_tokenB), 0);
-        lQueries[1] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenA), address(_tokenB), 1 hours);
-        lQueries[2] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenA), address(_tokenB), 2 hours);
+        lQueries[0] = OracleAccumulatorQuery(PriceType.RAW_PRICE, address(_tokenA), address(_tokenB), 0);
+        lQueries[1] = OracleAccumulatorQuery(PriceType.RAW_PRICE, address(_tokenA), address(_tokenB), 1 hours);
+        lQueries[2] = OracleAccumulatorQuery(PriceType.RAW_PRICE, address(_tokenA), address(_tokenB), 2 hours);
 
         // act
         int256[] memory lResults = _oracle.getPastAccumulators(lQueries);
@@ -924,7 +924,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // act & assert
         vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
-        _oracle.getLatest(OracleLatestQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA)));
+        _oracle.getLatest(OracleLatestQuery(PriceType.RAW_PRICE, address(_tokenB), address(_tokenA)));
     }
 
     function testGetPastAccumulators_Inverted() external {
@@ -937,9 +937,9 @@ contract ReservoirPriceOracleTest is BaseTest {
         _pair.sync();
         _oracle.designatePair(address(_tokenA), address(_tokenB), _pair);
         OracleAccumulatorQuery[] memory lQueries = new OracleAccumulatorQuery[](3);
-        lQueries[0] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 0);
-        lQueries[1] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 1 hours);
-        lQueries[2] = OracleAccumulatorQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 2 hours);
+        lQueries[0] = OracleAccumulatorQuery(PriceType.RAW_PRICE, address(_tokenB), address(_tokenA), 0);
+        lQueries[1] = OracleAccumulatorQuery(PriceType.RAW_PRICE, address(_tokenB), address(_tokenA), 1 hours);
+        lQueries[2] = OracleAccumulatorQuery(PriceType.RAW_PRICE, address(_tokenB), address(_tokenA), 2 hours);
 
         // act & assert
         vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
@@ -954,7 +954,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         _pair.sync();
         _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
         OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
-        lQueries[0] = OracleAverageQuery(Variable.RAW_PRICE, address(_tokenB), address(_tokenA), 10, 0);
+        lQueries[0] = OracleAverageQuery(PriceType.RAW_PRICE, address(_tokenB), address(_tokenA), 10, 0);
 
         // act & assert
         vm.expectRevert(OracleErrors.NoDesignatedPair.selector);

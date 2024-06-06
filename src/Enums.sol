@@ -12,7 +12,7 @@ pragma solidity ^0.8.0;
 //   as a countermeasure to oracle manipulation attempts.
 //   Refer to `maxChangeRate` and `maxChangePerTrade` in `ReservoirPair` and the `Observation` struct
 //   Note that the price is computed *including* the tokens decimals, just like the raw price.
-enum Variable {
+enum PriceType {
     RAW_PRICE,
     CLAMPED_PRICE
 }

@@ -15,17 +15,17 @@ pragma solidity ^0.8.0;
 
 import { Observation } from "amm-core/ReservoirPair.sol";
 
-import { Variable } from "src/Enums.sol";
+import { PriceType } from "src/Enums.sol";
 import { OracleErrors } from "src/libraries/OracleErrors.sol";
 
 library Samples {
     /**
-     * @dev Returns the instant value stored in `sample` for `variable`.
+     * @dev Returns the instant value stored in `sample` for `priceType`.
      */
-    function instant(Observation memory sample, Variable variable) internal pure returns (int256) {
-        if (variable == Variable.RAW_PRICE) {
+    function instant(Observation memory sample, PriceType priceType) internal pure returns (int256) {
+        if (priceType == PriceType.RAW_PRICE) {
             return sample.logInstantRawPrice;
-        } else if (variable == Variable.CLAMPED_PRICE) {
+        } else if (priceType == PriceType.CLAMPED_PRICE) {
             return sample.logInstantClampedPrice;
         } else {
             revert OracleErrors.BadVariableRequest();
@@ -33,12 +33,12 @@ library Samples {
     }
 
     /**
-     * @dev Returns the accumulator value stored in `sample` for `variable`.
+     * @dev Returns the accumulator value stored in `sample` for `priceType`.
      */
-    function accumulator(Observation memory sample, Variable variable) internal pure returns (int256) {
-        if (variable == Variable.RAW_PRICE) {
+    function accumulator(Observation memory sample, PriceType priceType) internal pure returns (int256) {
+        if (priceType == PriceType.RAW_PRICE) {
             return sample.logAccRawPrice;
-        } else if (variable == Variable.CLAMPED_PRICE) {
+        } else if (priceType == PriceType.CLAMPED_PRICE) {
             return sample.logAccClampedPrice;
         } else {
             revert OracleErrors.BadVariableRequest();
