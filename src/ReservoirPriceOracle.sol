@@ -32,6 +32,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
+    event FallbackOracleSet(address fallbackOracle);
     event PriceDeviationThreshold(uint256 newThreshold);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
@@ -42,6 +43,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    /// @notice The PriceOracle to call if this router is not configured for base/quote.
+    /// @dev If `address(0)` then there is no fallback.
+    address public fallbackOracle;
 
     /// @dev the following 4 storage variables take up 1 storage slot
 
@@ -90,7 +95,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @inheritdoc IPriceOracle
     function getQuote(uint256 aAmount, address aBase, address aQuote) external view returns (uint256 rOut) {
-        rOut = _getQuote(aAmount, aBase, aQuote);
+        (rOut,) = _getQuotes(aAmount, aBase, aQuote, false);
     }
 
     /// @inheritdoc IPriceOracle
@@ -99,8 +104,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         view
         returns (uint256 rBidOut, uint256 rAskOut)
     {
-        uint256 lResult = _getQuote(aAmount, aBase, aQuote);
-        (rBidOut, rAskOut) = (lResult, lResult);
+        (rBidOut, rAskOut) = _getQuotes(aAmount, aBase, aQuote, true);
     }
 
     // price update related functions
@@ -377,19 +381,28 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _getQuote(uint256 aAmount, address aBase, address aQuote) internal view returns (uint256 rOut) {
-        if (aBase == aQuote) return aAmount;
+    function _getQuotes(uint256 aAmount, address aBase, address aQuote, bool isGetQuotes)
+        internal
+        view
+        returns (uint256 rBidOut, uint256 rAskOut)
+    {
+        if (aBase == aQuote) return (aAmount, aAmount);
         if (aAmount > Constants.MAX_AMOUNT_IN) revert OracleErrors.AmountInTooLarge();
 
         (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
+        // route does not exist on our oracle, attempt querying the fallback
         if (lRoute.length == 0) {
-            revert OracleErrors.NoPath();
+            if (fallbackOracle == address(0)) revert OracleErrors.NoPath();
+
+            // We do not catch errors here so the fallback oracle will revert if it doesn't support the query.
+            if (isGetQuotes) (rBidOut, rAskOut) = IPriceOracle(fallbackOracle).getQuotes(aAmount, aBase, aQuote);
+            else rBidOut = rAskOut = IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote);
         } else if (lRoute.length == 2) {
             if (lPrice == 0) revert OracleErrors.PriceZero();
-            rOut = _calcAmtOut(aAmount, lPrice, lDecimalDiff, lRoute[0] != aBase);
+            rBidOut = rAskOut = _calcAmtOut(aAmount, lPrice, lDecimalDiff, lRoute[0] != aBase);
         }
         // for composite route, read simple prices to derive composite price
         else {
@@ -407,7 +420,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 if (lPrice == 0) revert OracleErrors.PriceZero();
                 lIntermediateAmount = _calcAmtOut(lIntermediateAmount, lPrice, lDecimalDiff, lRoute[i] != lLowerToken);
             }
-            rOut = lIntermediateAmount;
+            rBidOut = rAskOut = lIntermediateAmount;
         }
     }
 
@@ -443,6 +456,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                   ADMIN FUNCTIONS                                         //
     ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    function setFallbackOracle(address aFallbackOracle) public onlyOwner {
+        fallbackOracle = aFallbackOracle;
+        emit FallbackOracleSet(aFallbackOracle);
+    }
 
     function updatePriceDeviationThreshold(uint64 aNewThreshold) public onlyOwner {
         if (aNewThreshold > Constants.MAX_DEVIATION_THRESHOLD) {

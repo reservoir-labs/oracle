@@ -19,6 +19,7 @@ import {
 import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
 import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
 import { Constants } from "src/libraries/Constants.sol";
+import { MockFallbackOracle } from "test/mock/MockFallbackOracle.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
@@ -33,10 +34,12 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     uint256 private constant WAD = 1e18;
 
+    address internal constant ADDRESS_THRESHOLD = address(0x1000);
+
     // to keep track of addresses to ensure no clash for fuzz tests
     EnumerableSetLib.AddressSet internal _addressSet;
 
-    address internal constant ADDRESS_THRESHOLD = address(0x1000);
+    MockFallbackOracle internal _fallbackOracle = new MockFallbackOracle();
 
     // writes the cached prices, for easy testing
     function _writePriceCache(address aToken0, address aToken1, uint256 aPrice) internal {
@@ -467,6 +470,20 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // assert
         assertEq(lAmtOut, aAmtIn);
+    }
+
+    function testGetQuote_UseFallback() external {
+        // arrange
+        _oracle.setFallbackOracle(address(_fallbackOracle));
+
+        // act
+        uint256 lAmountOut = _oracle.getQuote(1, address(_tokenC), address(_tokenD));
+        (uint256 lBidOut, uint256 lAskOut) = _oracle.getQuotes(1, address(_tokenC), address(_tokenD));
+
+        // assert
+        assertGt(lAmountOut, 0);
+        assertGt(lBidOut, 0);
+        assertGt(lAskOut, 0);
     }
 
     function testUpdatePriceDeviationThreshold(uint256 aNewThreshold) external {
@@ -963,6 +980,12 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.getTimeWeightedAverage(lQueries);
     }
 
+    function testSetFallbackOracle_NotOwner() external {
+        vm.prank(address(123));
+        vm.expectRevert("UNAUTHORIZED");
+        _oracle.setFallbackOracle(address(456));
+    }
+
     function testDesignatePair_IncorrectPair() external {
         // act & assert
         vm.expectRevert();
@@ -1105,7 +1128,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updateRewardGasAmount(111);
     }
 
-    function testGetQuote_NoPath() external {
+    function testGetQuote_NoFallbackOracle() external {
         // act & assert
         vm.expectRevert(OracleErrors.NoPath.selector);
         _oracle.getQuote(123, address(123), address(456));
