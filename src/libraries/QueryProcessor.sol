@@ -18,7 +18,7 @@ import { Buffer } from "amm-core/libraries/Buffer.sol";
 import { ReservoirPair, Observation } from "amm-core/ReservoirPair.sol";
 
 import { OracleErrors } from "src/libraries/OracleErrors.sol";
-import { Samples, Variable } from "src/libraries/Samples.sol";
+import { Samples, PriceType } from "src/libraries/Samples.sol";
 
 /**
  * @dev Auxiliary library for PoolPriceOracle, offloading most of the query code to reduce bytecode size by using this
@@ -32,13 +32,13 @@ library QueryProcessor {
     using Samples for Observation;
 
     /**
-     * @dev Returns the value for `variable` at the indexed sample.
+     * @dev Returns the value for `priceType` at the indexed sample.
      */
-    function getInstantValue(ReservoirPair pair, Variable variable, uint256 index) internal view returns (uint256) {
+    function getInstantValue(ReservoirPair pair, PriceType priceType, uint256 index) internal view returns (uint256) {
         Observation memory sample = pair.observation(index);
         if (sample.timestamp == 0) revert OracleErrors.OracleNotInitialized();
 
-        int256 rawInstantValue = sample.instant(variable);
+        int256 rawInstantValue = sample.instant(priceType);
         return LogCompression.fromLowResLog(rawInstantValue);
     }
 
@@ -47,7 +47,7 @@ library QueryProcessor {
      */
     function getTimeWeightedAverage(
         ReservoirPair pair,
-        Variable variable,
+        PriceType priceType,
         uint256 secs,
         uint256 ago,
         uint16 latestIndex
@@ -61,14 +61,14 @@ library QueryProcessor {
         // `endAccumulator` and `beginAccumulators` themselves will not overflow/underflow until at least after year 2106. So the subtraction will not underflow as well.
         // Therefore it is safe to use unchecked here
         unchecked {
-            int256 beginAccumulator = getPastAccumulator(pair, variable, latestIndex, ago + secs);
-            int256 endAccumulator = getPastAccumulator(pair, variable, latestIndex, ago);
+            int256 beginAccumulator = getPastAccumulator(pair, priceType, latestIndex, ago + secs);
+            int256 endAccumulator = getPastAccumulator(pair, priceType, latestIndex, ago);
             return LogCompression.fromLowResLog((endAccumulator - beginAccumulator) / int256(secs));
         }
     }
 
     /**
-     * @dev Returns the value of the accumulator for `variable` `ago` seconds ago. `latestIndex` must be the index of
+     * @dev Returns the value of the accumulator for `priceType` `ago` seconds ago. `latestIndex` must be the index of
      * the latest sample in the buffer.
      *
      * Reverts under the following conditions:
@@ -84,7 +84,7 @@ library QueryProcessor {
      * timestamp is stored every two minutes), it is estimated by performing linear interpolation using the closest
      * values. This process is guaranteed to complete performing at most 11 storage reads.
      */
-    function getPastAccumulator(ReservoirPair pair, Variable variable, uint16 latestIndex, uint256 ago)
+    function getPastAccumulator(ReservoirPair pair, PriceType priceType, uint16 latestIndex, uint256 ago)
         internal
         view
         returns (int256)
@@ -116,7 +116,7 @@ library QueryProcessor {
             // The accumulator can be represented in 53 bits, timestamps in 31bits, and the instant value in 22 bits. So this addition will not overflow.
             unchecked {
                 uint256 elapsed = lookUpTime - latestTimestamp;
-                return latestSample.accumulator(variable) + (latestSample.instant(variable) * int256(elapsed));
+                return latestSample.accumulator(priceType) + (latestSample.instant(priceType) * int256(elapsed));
             }
         } else {
             // The look up time is before the latest sample, but we need to make sure that it is not before the oldest
@@ -166,14 +166,14 @@ library QueryProcessor {
                 // The accumulators can be represented in 53 bits, and timestamps are in 31 bits. So the addition and subtraction will not under/overflow.
                 // `lookupTime` is greater than `latestTimestamp` and is thus also greater than `prev.timestamp` so subtraction will not underflow.
                 unchecked {
-                    int256 samplesAccDiff = next.accumulator(variable) - prev.accumulator(variable);
+                    int256 samplesAccDiff = next.accumulator(priceType) - prev.accumulator(priceType);
                     uint256 elapsed = lookUpTime - prev.timestamp;
-                    return prev.accumulator(variable) + ((samplesAccDiff * int256(elapsed)) / int256(samplesTimeDiff));
+                    return prev.accumulator(priceType) + ((samplesAccDiff * int256(elapsed)) / int256(samplesTimeDiff));
                 }
             } else {
                 // Rarely, one of the samples will have the exact requested look up time, which is indicated by `prev`
                 // and `next` being the same. In this case, we simply return the accumulator at that point in time.
-                return prev.accumulator(variable);
+                return prev.accumulator(priceType);
             }
         }
     }

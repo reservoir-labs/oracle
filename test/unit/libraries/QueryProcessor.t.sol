@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import { BaseTest, FactoryStoreLib, GenericFactory } from "test/__fixtures/BaseTest.t.sol";
 
 import { Buffer, OracleErrors } from "src/libraries/QueryProcessor.sol";
-import { QueryProcessorWrapper, ReservoirPair, Observation, Variable } from "test/wrapper/QueryProcessorWrapper.sol";
+import { QueryProcessorWrapper, ReservoirPair, Observation, PriceType } from "test/wrapper/QueryProcessorWrapper.sol";
 
 contract QueryProcessorTest is BaseTest {
     using FactoryStoreLib for GenericFactory;
@@ -74,8 +74,8 @@ contract QueryProcessorTest is BaseTest {
         _pair.swap(-105e18, true, address(this), "");
 
         // act
-        uint256 lInstantRawPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, 0);
-        uint256 lInstantClampedPrice = _queryProcessor.getInstantValue(_pair, Variable.CLAMPED_PRICE, 0);
+        uint256 lInstantRawPrice = _queryProcessor.getInstantValue(_pair, PriceType.RAW_PRICE, 0);
+        uint256 lInstantClampedPrice = _queryProcessor.getInstantValue(_pair, PriceType.CLAMPED_PRICE, 0);
 
         // assert - instant price should be the new price after swap, not the price before swap
         assertApproxEqRel(lInstantRawPrice, 100e18, 0.01e18);
@@ -111,12 +111,12 @@ contract QueryProcessorTest is BaseTest {
         // act
         (,,, uint16 lLatestIndex) = _pair.getReserves();
         uint256 lAveragePrice =
-            _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, lSecs, lAgo, lLatestIndex);
+            _queryProcessor.getTimeWeightedAverage(_pair, PriceType.RAW_PRICE, lSecs, lAgo, lLatestIndex);
 
         // assert
         // as it is hard to calc the exact average price given so many fuzz parameters, we just assert that the price should be within a range
         uint256 lStartingPrice = 98.9223e18;
-        uint256 lEndingPrice = _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, lLatestIndex);
+        uint256 lEndingPrice = _queryProcessor.getInstantValue(_pair, PriceType.RAW_PRICE, lLatestIndex);
         assertLt(lAveragePrice, lStartingPrice);
         assertGt(lAveragePrice, lEndingPrice);
     }
@@ -138,7 +138,7 @@ contract QueryProcessorTest is BaseTest {
 
         // act
         uint256 lAgo = lBlockTime * lBlocksAgo;
-        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
+        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, PriceType.RAW_PRICE, lIndex, lAgo);
 
         // assert
         uint256 lDesiredIndex = lIndex.sub(lBlocksAgo);
@@ -161,7 +161,7 @@ contract QueryProcessorTest is BaseTest {
         (,,, uint16 lIndex) = _pair.getReserves();
 
         // act
-        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, 0);
+        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, PriceType.RAW_PRICE, lIndex, 0);
 
         // assert
         vm.prank(address(_queryProcessor));
@@ -188,7 +188,7 @@ contract QueryProcessorTest is BaseTest {
         uint256 lAgo = lObservationsToWrite > Buffer.SIZE
             ? block.timestamp - _pair.observation(lIndex.next()).timestamp
             : block.timestamp - (lStartTime + lBlockTime);
-        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
+        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, PriceType.RAW_PRICE, lIndex, lAgo);
 
         // assert
         Observation memory lObs = _pair.observation(lObservationsToWrite > Buffer.SIZE ? lIndex.next() : 0);
@@ -216,7 +216,7 @@ contract QueryProcessorTest is BaseTest {
         Observation memory lPrevObs = _pair.observation(lRandomSlot);
         uint256 lWantedTimestamp = lPrevObs.timestamp + lBlockTime / 2;
         uint256 lAgo = block.timestamp - lWantedTimestamp;
-        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
+        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, PriceType.RAW_PRICE, lIndex, lAgo);
 
         // assert
         Observation memory lNextObs = _pair.observation(lRandomSlot.next());
@@ -244,7 +244,7 @@ contract QueryProcessorTest is BaseTest {
         (,,, uint16 lIndex) = _pair.getReserves();
 
         // act
-        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, 0);
+        int256 lAcc = _queryProcessor.getPastAccumulator(_pair, PriceType.RAW_PRICE, lIndex, 0);
 
         // assert
         vm.prank(address(_queryProcessor));
@@ -338,12 +338,12 @@ contract QueryProcessorTest is BaseTest {
     function testGetInstantValue_NotInitialized(uint256 aIndex) external {
         // act & assert
         vm.expectRevert(OracleErrors.OracleNotInitialized.selector);
-        _queryProcessor.getInstantValue(_pair, Variable.RAW_PRICE, aIndex);
+        _queryProcessor.getInstantValue(_pair, PriceType.RAW_PRICE, aIndex);
     }
 
     function testGetInstantValue_NotInitialized_BeyondBufferSize(uint8 aVariable, uint16 aIndex) external {
         // assume
-        Variable lVar = Variable(bound(aVariable, 0, 1));
+        PriceType lVar = PriceType(bound(aVariable, 0, 1));
         uint16 lIndex = uint16(bound(aIndex, Buffer.SIZE, type(uint16).max));
 
         // arrange - fill up buffer size
@@ -356,7 +356,7 @@ contract QueryProcessorTest is BaseTest {
 
     function testGetPastAccumulator_BufferEmpty(uint8 aVariable) external {
         // assume
-        Variable lVar = Variable(bound(aVariable, 0, 1));
+        PriceType lVar = PriceType(bound(aVariable, 0, 1));
 
         // arrange
         (,,, uint16 lIndex) = _pair.getReserves();
@@ -383,7 +383,7 @@ contract QueryProcessorTest is BaseTest {
 
         // act & assert
         vm.expectRevert(OracleErrors.InvalidSeconds.selector);
-        _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
+        _queryProcessor.getPastAccumulator(_pair, PriceType.RAW_PRICE, lIndex, lAgo);
     }
 
     function testGetPastAccumulator_QueryTooOld(
@@ -409,7 +409,7 @@ contract QueryProcessorTest is BaseTest {
 
         // act & assert
         vm.expectRevert(OracleErrors.QueryTooOld.selector);
-        _queryProcessor.getPastAccumulator(_pair, Variable.RAW_PRICE, lIndex, lAgo);
+        _queryProcessor.getPastAccumulator(_pair, PriceType.RAW_PRICE, lIndex, lAgo);
     }
 
     // technically this should never happen in production as `getPastAccumulator` would have reverted with the
@@ -430,6 +430,6 @@ contract QueryProcessorTest is BaseTest {
     function testGetTimeWeightedAverage_BadSecs() external {
         // act & assert
         vm.expectRevert(OracleErrors.BadSecs.selector);
-        _queryProcessor.getTimeWeightedAverage(_pair, Variable.RAW_PRICE, 0, 0, 0);
+        _queryProcessor.getTimeWeightedAverage(_pair, PriceType.RAW_PRICE, 0, 0, 0);
     }
 }

@@ -11,7 +11,7 @@ import {
     OracleAccumulatorQuery
 } from "src/interfaces/IReservoirPriceOracle.sol";
 import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
-import { QueryProcessor, ReservoirPair, Buffer, Variable } from "src/libraries/QueryProcessor.sol";
+import { QueryProcessor, ReservoirPair, Buffer, PriceType } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
@@ -37,6 +37,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
     event Price(address token0, address token1, uint256 price);
+    event SetPriceType(PriceType priceType);
     event TwapPeriod(uint256 newPeriod);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,6 +47,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @notice The PriceOracle to call if this router is not configured for base/quote.
     /// @dev If `address(0)` then there is no fallback.
     address public fallbackOracle;
+
+    /// @dev the following 4 storage variables take up 1 storage slot
 
     /// @notice percentage change greater than which, a price update may result in a reward payout of native tokens,
     /// subject to availability of rewards.
@@ -59,6 +62,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @notice TWAP period (in seconds) for querying the oracle
     uint64 public twapPeriod;
 
+    /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
+    PriceType public priceType;
+
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
 
@@ -66,10 +72,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     //                                CONSTRUCTOR, FALLBACKS                                     //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    constructor(uint64 aThreshold, uint64 aTwapPeriod, uint64 aMultiplier) {
+    constructor(uint64 aThreshold, uint64 aTwapPeriod, uint64 aMultiplier, PriceType aType) {
         updatePriceDeviationThreshold(aThreshold);
         updateTwapPeriod(aTwapPeriod);
         updateRewardGasAmount(aMultiplier);
+        setPriceType(aType);
     }
 
     /// @dev contract will hold native tokens to be distributed as gas bounty for updating the prices
@@ -142,7 +149,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
             lQueries[i] = OracleAverageQuery(
-                Variable.RAW_PRICE,
+                priceType,
                 lToken0,
                 lToken1,
                 twapPeriod,
@@ -188,7 +195,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
-            uint256 lResult = lPair.getTimeWeightedAverage(lQuery.variable, lQuery.secs, lQuery.ago, lIndex);
+            uint256 lResult = lPair.getTimeWeightedAverage(lQuery.priceType, lQuery.secs, lQuery.ago, lIndex);
             rResults[i] = lResult;
         }
     }
@@ -199,7 +206,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         _validatePair(lPair);
 
         (,,, uint256 lIndex) = lPair.getReserves();
-        uint256 lResult = lPair.getInstantValue(aQuery.variable, lIndex);
+        uint256 lResult = lPair.getInstantValue(aQuery.priceType, lIndex);
         return lResult;
     }
 
@@ -218,7 +225,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             _validatePair(lPair);
 
             (,,, uint16 lIndex) = lPair.getReserves();
-            int256 lAcc = lPair.getPastAccumulator(lQuery.variable, lIndex, lQuery.ago);
+            int256 lAcc = lPair.getPastAccumulator(lQuery.priceType, lIndex, lQuery.ago);
             rResults[i] = lAcc;
         }
     }
@@ -491,6 +498,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         delete pairs[aToken0][aToken1];
         emit DesignatePair(aToken0, aToken1, ReservoirPair(address(0)));
+    }
+
+    function setPriceType(PriceType aType) public onlyOwner {
+        priceType = aType;
+        emit SetPriceType(aType);
     }
 
     /// @notice Sets the price route between aToken0 and aToken1, and also intermediate routes if previously undefined
