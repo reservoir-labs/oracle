@@ -35,6 +35,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event FallbackOracleSet(address fallbackOracle);
     event PriceDeviationThreshold(uint256 newThreshold);
+    event ResolvedVaultSet(address vault, address asset);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
     event Price(address token0, address token1, uint256 price);
@@ -68,6 +69,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
+
+    /// @notice ERC4626 vaults resolved using internal pricing (`convertToAssets`).
+    mapping(address vault => address asset) public resolvedVaults;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                CONSTRUCTOR, FALLBACKS                                     //
@@ -382,7 +386,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _getQuotes(uint256 aAmount, address aBase, address aQuote, bool isGetQuotes)
+    function _getQuotes(uint256 aAmount, address aBase, address aQuote, bool aIsGetQuotes)
         internal
         view
         returns (uint256 rBidOut, uint256 rAskOut)
@@ -396,11 +400,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         // route does not exist on our oracle, attempt querying the fallback
         if (lRoute.length == 0) {
-            if (fallbackOracle == address(0)) revert OracleErrors.NoPath();
+            address lBaseAsset = resolvedVaults[aBase];
 
-            // We do not catch errors here so the fallback oracle will revert if it doesn't support the query.
-            if (isGetQuotes) (rBidOut, rAskOut) = IPriceOracle(fallbackOracle).getQuotes(aAmount, aBase, aQuote);
-            else rBidOut = rAskOut = IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote);
+            if (lBaseAsset != address(0)) {
+                uint256 lResolvedAmountIn = IERC4626(aBase).convertToAssets(aAmount);
+                return _getQuotes(lResolvedAmountIn, lBaseAsset, aQuote, aIsGetQuotes);
+            }
+
+            return _useFallbackOracle(aAmount, aBase, aQuote, aIsGetQuotes);
         } else if (lRoute.length == 2) {
             if (lPrice == 0) revert OracleErrors.PriceZero();
             rBidOut = rAskOut = _calcAmtOut(aAmount, lPrice, lDecimalDiff, lRoute[0] != aBase);
@@ -454,6 +461,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
+    function _useFallbackOracle(uint256 aAmount, address aBase, address aQuote, bool aIsGetQuotes) internal view returns (uint256 rBidOut, uint256 rAskOut) {
+        if (fallbackOracle == address(0)) revert OracleErrors.NoPath();
+
+        // We do not catch errors here so the fallback oracle will revert if it doesn't support the query.
+        if (aIsGetQuotes) (rBidOut, rAskOut) = IPriceOracle(fallbackOracle).getQuotes(aAmount, aBase, aQuote);
+        else rBidOut = rAskOut = IPriceOracle(fallbackOracle).getQuote(aAmount, aBase, aQuote);
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                   ADMIN FUNCTIONS                                         //
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -504,6 +519,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function setPriceType(PriceType aType) public onlyOwner {
         priceType = aType;
         emit SetPriceType(aType);
+    }
+
+    function setResolvedVault(address aVault, bool aSet) external onlyOwner {
+        address lAsset = aSet ? IERC4626(aVault).asset() : address(0);
+        resolvedVaults[aVault] = lAsset;
+        emit ResolvedVaultSet(aVault, lAsset);
     }
 
     /// @notice Sets the price route between aToken0 and aToken1, and also intermediate routes if previously undefined
