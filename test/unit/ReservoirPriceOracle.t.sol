@@ -20,6 +20,7 @@ import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
 import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
 import { Constants } from "src/libraries/Constants.sol";
 import { MockFallbackOracle } from "test/mock/MockFallbackOracle.sol";
+import { StubERC4626 } from "test/mock/StubERC4626.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
@@ -484,6 +485,23 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertGt(lAmountOut, 0);
         assertGt(lBidOut, 0);
         assertGt(lAskOut, 0);
+    }
+
+    function testGetQuote_BaseIsVault(uint256 aRate) external {
+        // assume
+        uint256 lRate = bound(aRate, 1, 1e36);
+
+        // arrange
+        uint256 lAmtIn = 5e18;
+        StubERC4626 lVault = new StubERC4626(address(_tokenA), lRate);
+        _oracle.setResolvedVault(address(lVault), true);
+        _writePriceCache(address(_tokenA), address(_tokenB), 1e18);
+
+        // act
+        uint256 lAmtOut = _oracle.getQuote(lAmtIn, address(lVault), address(_tokenB));
+
+        // assert
+        assertEq(lAmtOut / 1e12, lAmtIn * lRate / 1e18);
     }
 
     function testUpdatePriceDeviationThreshold(uint256 aNewThreshold) external {
