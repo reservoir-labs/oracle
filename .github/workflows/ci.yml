@@ -33,7 +33,7 @@ jobs:
       - run: npm run test:unit
 
   test-unit-large:
-    description: for tests that require via-ir compilation
+    name: For large/complex tests that require via-ir compilation
     runs-on: ubuntu-latest
 
     steps:
