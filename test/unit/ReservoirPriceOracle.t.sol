@@ -33,7 +33,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
 
-    uint256 private constant WAD = 1e18;
+    uint256 internal constant WAD = 1e18;
 
     address internal constant ADDRESS_THRESHOLD = address(0x1000);
 

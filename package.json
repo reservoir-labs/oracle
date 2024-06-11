@@ -54,8 +54,9 @@
     "submodule:reset": "git submodule update --recursive",
     "test": "npm run test:unit",
     "test:all": "npm run test:unit && npm run test:integration",
-    "test:integration": "export FOUNDRY_PROFILE=integration && forge test ",
-    "test:unit": "forge test"
+    "test:integration": "export FOUNDRY_PROFILE=integration && forge test",
+    "test:unit": "forge test",
+    "test:unit-large": "export FOUNDRY_PROFILE=large-test && forge test"
   },
   "devDependencies": {
     "markdownlint": "0.34.0",

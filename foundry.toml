@@ -15,6 +15,10 @@ fs_permissions = [
 ]
 ignored_error_codes = []
 
+[profile.large-test]
+via_ir = true
+match_path = "test/unit/large/*.sol"
+
 [profile.integration]
 match_path = "test/integration/*.sol"
 

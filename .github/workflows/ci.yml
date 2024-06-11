@@ -32,6 +32,17 @@ jobs:
           version: nightly
       - run: npm run test:unit
 
+  test-unit-large:
+    description: for tests that require via-ir compilation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          node-version-file: ".nvmrc""
+      - run: npm ci
+      - run: npm run test:unit-large
+
   test-integration:
     runs-on: ubuntu-latest
     steps:
