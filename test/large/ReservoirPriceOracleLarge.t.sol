@@ -103,8 +103,8 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
             ? lExpectedAmtBOut * lPrice2 * 10 ** lTokenCDecimal / 10 ** lTokenBDecimal / WAD
             : lExpectedAmtBOut * WAD * 10 ** lTokenCDecimal / lPrice2 / 10 ** lTokenBDecimal;
         uint256 lExpectedAmtDOut = lTokenC < lTokenD
-            ? lExpectedAmtCOut * lPrice2 * 10 ** lTokenDDecimal / 10 ** lTokenCDecimal / WAD
-            : lExpectedAmtCOut * WAD * 10 ** lTokenDDecimal / lPrice2 / 10 ** lTokenCDecimal;
+            ? lExpectedAmtCOut * lPrice3 * 10 ** lTokenDDecimal / 10 ** lTokenCDecimal / WAD
+            : lExpectedAmtCOut * WAD * 10 ** lTokenDDecimal / lPrice3 / 10 ** lTokenCDecimal;
 
         assertEq(lAmtDOut, lExpectedAmtDOut);
     }
