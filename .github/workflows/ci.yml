@@ -39,8 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          node-version-file: ".nvmrc""
-      - run: npm ci
+          submodules: recursive
       - run: npm run test:unit-large
 
   test-integration:
