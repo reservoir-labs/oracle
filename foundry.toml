@@ -1,6 +1,5 @@
 [profile.default]
 solc = "0.8.26"
-#via_ir = true
 bytecode_hash = "ipfs"
 optimizer_runs = 1_000_000
 libs = ['lib']
@@ -14,10 +13,13 @@ fs_permissions = [
     { access = "read", path = "./out" }
 ]
 ignored_error_codes = []
+skip = ["test/large/*.sol"]
 
 [profile.large-test]
 via_ir = true
-match_path = "test/unit/large/*.sol"
+match_path = "test/large/*.sol"
+match_test = "testGetQuote_RandomizeAllParam_3HopRoute"
+skip = []
 
 [profile.integration]
 match_path = "test/integration/*.sol"
