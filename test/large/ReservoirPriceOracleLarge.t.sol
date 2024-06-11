@@ -75,7 +75,7 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
             lRoute[3] = aTokenAAddress;
         }
 
-        _oracle.setRoute(aTokenAAddress, aTokenDAddress, lRoute);
+        _oracle.setRoute(lRoute[0], lRoute[3], lRoute);
         _writePriceCache(
             lTokenA < lTokenB ? aTokenAAddress : aTokenBAddress,
             lTokenA < lTokenB ? aTokenBAddress : aTokenAAddress,
