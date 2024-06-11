@@ -4,8 +4,8 @@ pragma solidity ^0.8.0;
 contract StubERC4626 {
     address public asset;
     uint256 private rate;
-    string revertMsg = "oops";
-    bool doRevert;
+    string public revertMsg = "oops";
+    bool public doRevert;
 
     constructor(address _asset, uint256 _rate) {
         asset = _asset;

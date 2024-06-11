@@ -461,7 +461,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _useFallbackOracle(uint256 aAmount, address aBase, address aQuote, bool aIsGetQuotes) internal view returns (uint256 rBidOut, uint256 rAskOut) {
+    function _useFallbackOracle(uint256 aAmount, address aBase, address aQuote, bool aIsGetQuotes)
+        internal
+        view
+        returns (uint256 rBidOut, uint256 rAskOut)
+    {
         if (fallbackOracle == address(0)) revert OracleErrors.NoPath();
 
         // We do not catch errors here so the fallback oracle will revert if it doesn't support the query.

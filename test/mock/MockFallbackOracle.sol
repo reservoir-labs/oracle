@@ -12,11 +12,7 @@ contract MockFallbackOracle is IPriceOracle {
         out = amount;
     }
 
-    function getQuotes(uint256 amount, address, address)
-        external
-        pure
-        returns (uint256 bidOut, uint256 askOut)
-    {
+    function getQuotes(uint256 amount, address, address) external pure returns (uint256 bidOut, uint256 askOut) {
         (bidOut, askOut) = (amount, amount);
     }
 }
