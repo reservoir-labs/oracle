@@ -50,6 +50,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @dev If `address(0)` then there is no fallback.
     address public fallbackOracle;
 
+    // TODO: Natspec must be tied to a member. In this case this comment is tied
+    // to priceDeviationThreshold. Is that correct? Maybe just do a normal (//)
+    // comment?
     /// @dev the following 4 storage variables take up 1 storage slot
 
     /// @notice percentage change greater than which, a price update may result in a reward payout of native tokens,
@@ -57,6 +60,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// 1e18 == 100%
     uint64 public priceDeviationThreshold;
 
+    // TODO: Wording is confusing. Say "This number is multiplied by the base
+    // fee to determine the reward for keepers".
     /// @notice multiples of the base fee the contract rewards the caller for updating the price when it goes
     /// beyond the `priceDeviationThreshold`
     uint64 public rewardGasAmount;
@@ -64,12 +69,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @notice TWAP period (in seconds) for querying the oracle
     uint64 public twapPeriod;
 
+    // TODO: What's the use case for changing between price types? Should this be immutable or removed and one type be hardcoded?
     /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
     PriceType public priceType;
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
 
+    // TODO: Why is this needed?
     /// @notice ERC4626 vaults resolved using internal pricing (`convertToAssets`).
     mapping(address vault => address asset) public resolvedVaults;
 
@@ -194,6 +201,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         rResults = new uint256[](aQueries.length);
 
         OracleAverageQuery memory lQuery;
+        // TODO: We create the `aQueries` array just to iterate through it. Can
+        // we not just do each call inline without allocating an array?
         for (uint256 i = 0; i < aQueries.length; ++i) {
             lQuery = aQueries[i];
             ReservoirPair lPair = pairs[lQuery.base][lQuery.quote];
@@ -504,9 +513,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         emit RewardGasAmount(aNewMultiplier);
     }
 
-    // sets a specific pair to serve as price feed for a certain route
+    /// @notice Sets the pair to serve as price feed for a given route.
+    // TODO: Should be TokenA & TokenB because this function sorts them?
     function designatePair(address aToken0, address aToken1, ReservoirPair aPair) external onlyOwner {
         (aToken0, aToken1) = aToken0.sortTokens(aToken1);
+        // TODO: Should be require as it's possible to fail right? Generally
+        // assert is used for symbolic provers to find invariants they can break.
         assert(aToken0 == address(aPair.token0()) && aToken1 == address(aPair.token1()));
 
         pairs[aToken0][aToken1] = aPair;
@@ -525,6 +537,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         emit SetPriceType(aType);
     }
 
+    // TODO: What's the use case for these vaults? Is it to price wrapped tokens
+    // without needing a market?
     function setResolvedVault(address aVault, bool aSet) external onlyOwner {
         address lAsset = aSet ? IERC4626(aVault).asset() : address(0);
         resolvedVaults[aVault] = lAsset;
@@ -597,6 +611,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         assembly {
             sstore(lSlot, 0)
         }
+        // TODO: What about routs with length >4.
         // routes with length 4 use two words of storage
         if (lRoute.length == 4) {
             assembly {
