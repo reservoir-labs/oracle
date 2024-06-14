@@ -42,6 +42,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     event SetPriceType(PriceType priceType);
     event TwapPeriod(uint256 newPeriod);
 
+    /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
+    PriceType public immutable priceType;
+
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,7 +53,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @dev If `address(0)` then there is no fallback.
     address public fallbackOracle;
 
-    // The following 4 storage variables take up 1 storage slot.
+    // The following 3 storage variables take up 1 storage slot.
 
     /// @notice percentage change greater than which, a price update may result in a reward payout of native tokens,
     /// subject to availability of rewards.
@@ -62,10 +65,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @notice TWAP period (in seconds) for querying the oracle
     uint64 public twapPeriod;
-
-    // TODO: What's the use case for changing between price types? Should this be immutable or removed and one type be hardcoded?
-    /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
-    PriceType public priceType;
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
@@ -82,7 +81,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         updatePriceDeviationThreshold(aThreshold);
         updateTwapPeriod(aTwapPeriod);
         updateRewardGasAmount(aMultiplier);
-        setPriceType(aType);
+        priceType = aType;
     }
 
     /// @dev contract will hold native tokens to be distributed as gas bounty for updating the prices
@@ -524,11 +523,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         delete pairs[aToken0][aToken1];
         emit DesignatePair(aToken0, aToken1, ReservoirPair(address(0)));
-    }
-
-    function setPriceType(PriceType aType) public onlyOwner {
-        priceType = aType;
-        emit SetPriceType(aType);
     }
 
     // TODO: What's the use case for these vaults? Is it to price wrapped tokens
