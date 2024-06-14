@@ -925,7 +925,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testDesignatePair_IncorrectPair() external {
         // act & assert
-        vm.expectRevert();
+        vm.expectRevert(OracleErrors.IncorrectTokensDesignatePair.selector);
         _oracle.designatePair(address(_tokenA), address(_tokenC), _pair);
     }
 

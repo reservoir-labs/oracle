@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 /// @dev Collection of all oracle related errors.
 library OracleErrors {
     // config errors
+    error IncorrectTokensDesignatePair();
     error InvalidRoute();
     error InvalidRouteLength();
     error InvalidTwapPeriod();

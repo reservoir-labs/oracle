@@ -507,15 +507,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     /// @notice Sets the pair to serve as price feed for a given route.
-    // TODO: Should be TokenA & TokenB because this function sorts them?
-    function designatePair(address aToken0, address aToken1, ReservoirPair aPair) external onlyOwner {
-        (aToken0, aToken1) = aToken0.sortTokens(aToken1);
-        // TODO: Should be require as it's possible to fail right? Generally
-        // assert is used for symbolic provers to find invariants they can break.
-        assert(aToken0 == address(aPair.token0()) && aToken1 == address(aPair.token1()));
+    function designatePair(address aTokenA, address aTokenB, ReservoirPair aPair) external onlyOwner {
+        (aTokenA, aTokenB) = aTokenA.sortTokens(aTokenB);
+        if (aTokenA != address(aPair.token0()) || aTokenB != address(aPair.token1())) {
+            revert OracleErrors.IncorrectTokensDesignatePair();
+        }
 
-        pairs[aToken0][aToken1] = aPair;
-        emit DesignatePair(aToken0, aToken1, aPair);
+        pairs[aTokenA][aTokenB] = aPair;
+        emit DesignatePair(aTokenA, aTokenB, aPair);
     }
 
     function undesignatePair(address aToken0, address aToken1) external onlyOwner {
