@@ -57,10 +57,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// 1e18 == 100%
     uint64 public priceDeviationThreshold;
 
-    // TODO: Wording is confusing. Say "This number is multiplied by the base
-    // fee to determine the reward for keepers".
-    /// @notice multiples of the base fee the contract rewards the caller for updating the price when it goes
-    /// beyond the `priceDeviationThreshold`
+    /// @notice This number is multiplied by the base fee to determine the reward for keepers
     uint64 public rewardGasAmount;
 
     /// @notice TWAP period (in seconds) for querying the oracle
