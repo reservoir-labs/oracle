@@ -594,13 +594,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
-        // clear all storage slots that the route has written to previously
+        // clear the storage slot that the route has written to previously
         assembly {
             sstore(lSlot, 0)
         }
-        // TODO: What about routs with length >4.
-        // routes with length 4 use two words of storage
-        if (lRoute.length == 4) {
+
+        // routes with length MAX_ROUTE_LENGTH use one more word of storage
+        // `setRoute` enforces the MAX_ROUTE_LENGTH limit.
+        if (lRoute.length == Constants.MAX_ROUTE_LENGTH) {
             assembly {
                 sstore(add(lSlot, 1), 0)
             }
