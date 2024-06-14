@@ -50,10 +50,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @dev If `address(0)` then there is no fallback.
     address public fallbackOracle;
 
-    // TODO: Natspec must be tied to a member. In this case this comment is tied
-    // to priceDeviationThreshold. Is that correct? Maybe just do a normal (//)
-    // comment?
-    /// @dev the following 4 storage variables take up 1 storage slot
+    // The following 4 storage variables take up 1 storage slot.
 
     /// @notice percentage change greater than which, a price update may result in a reward payout of native tokens,
     /// subject to availability of rewards.
