@@ -38,12 +38,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     event ResolvedVaultSet(address vault, address asset);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
-    event Price(address token0, address token1, uint256 price);
-    event SetPriceType(PriceType priceType);
     event TwapPeriod(uint256 newPeriod);
 
     /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
-    PriceType public immutable priceType;
+    PriceType public immutable PRICE_TYPE;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
@@ -81,7 +79,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         updatePriceDeviationThreshold(aThreshold);
         updateTwapPeriod(aTwapPeriod);
         updateRewardGasAmount(aMultiplier);
-        priceType = aType;
+        PRICE_TYPE = aType;
     }
 
     /// @dev contract will hold native tokens to be distributed as gas bounty for updating the prices
@@ -154,7 +152,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
             lQueries[i] = OracleAverageQuery(
-                priceType,
+                PRICE_TYPE,
                 lToken0,
                 lToken1,
                 twapPeriod,
