@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import {
     ReservoirPriceOracleTest,
     EnumerableSetLib,
+    FixedPointMathLib,
     MintableERC20,
     ReservoirPair,
     IERC20
@@ -11,6 +12,7 @@ import {
 
 contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
     using EnumerableSetLib for EnumerableSetLib.AddressSet;
+    using FixedPointMathLib for uint256;
 
     function testGetQuote_RandomizeAllParam_3HopRoute(
         uint256 aPrice1,
@@ -97,14 +99,14 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
 
         // assert
         uint256 lExpectedAmtBOut = lTokenA < lTokenB
-            ? lAmtIn * 10 ** lTokenADecimal * lPrice1 * 10 ** lTokenBDecimal / 10 ** lTokenADecimal / WAD
-            : lAmtIn * 10 ** lTokenADecimal * WAD * 10 ** lTokenBDecimal / lPrice1 / 10 ** lTokenADecimal;
+            ? (lAmtIn * 10 ** lTokenADecimal).fullMulDiv(lPrice1 * 10 ** lTokenBDecimal, 10 ** lTokenADecimal * WAD)
+            : (lAmtIn * 10 ** lTokenADecimal).fullMulDiv(WAD * 10 ** lTokenBDecimal, lPrice1 * 10 ** lTokenADecimal);
         uint256 lExpectedAmtCOut = lTokenB < lTokenC
-            ? lExpectedAmtBOut * lPrice2 * 10 ** lTokenCDecimal / 10 ** lTokenBDecimal / WAD
-            : lExpectedAmtBOut * WAD * 10 ** lTokenCDecimal / lPrice2 / 10 ** lTokenBDecimal;
+            ? lExpectedAmtBOut.fullMulDiv(lPrice2 * 10 ** lTokenCDecimal, 10 ** lTokenBDecimal * WAD)
+            : lExpectedAmtBOut.fullMulDiv(WAD * 10 ** lTokenCDecimal, lPrice2 * 10 ** lTokenBDecimal);
         uint256 lExpectedAmtDOut = lTokenC < lTokenD
-            ? lExpectedAmtCOut * lPrice3 * 10 ** lTokenDDecimal / 10 ** lTokenCDecimal / WAD
-            : lExpectedAmtCOut * WAD * 10 ** lTokenDDecimal / lPrice3 / 10 ** lTokenCDecimal;
+            ? lExpectedAmtCOut.fullMulDiv(lPrice3 * 10 ** lTokenDDecimal, 10 ** lTokenCDecimal * WAD)
+            : lExpectedAmtCOut.fullMulDiv(WAD * 10 ** lTokenDDecimal, lPrice3 * 10 ** lTokenCDecimal);
 
         assertEq(lAmtDOut, lExpectedAmtDOut);
     }
