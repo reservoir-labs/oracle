@@ -148,19 +148,18 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](lRoute.length - 1);
 
+        uint256[] memory lNewPrices = new uint256[](lRoute.length - 1);
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
             (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
-            lQueries[i] = OracleAverageQuery(
+            lNewPrices[i] = _getTimeWeightedAverageSingle(OracleAverageQuery(
                 PRICE_TYPE,
                 lToken0,
                 lToken1,
                 twapPeriod,
                 0 // now
-            );
+            ));
         }
-
-        uint256[] memory lNewPrices = getTimeWeightedAverage(lQueries);
 
         for (uint256 i = 0; i < lNewPrices.length; ++i) {
             address lBase = lQueries[i].base;
@@ -192,17 +191,21 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         rResults = new uint256[](aQueries.length);
 
         OracleAverageQuery memory lQuery;
-        // TODO: We create the `aQueries` array just to iterate through it. Can
-        // we not just do each call inline without allocating an array?
         for (uint256 i = 0; i < aQueries.length; ++i) {
-            lQuery = aQueries[i];
-            ReservoirPair lPair = pairs[lQuery.base][lQuery.quote];
-            _validatePair(lPair);
-
-            (,,, uint16 lIndex) = lPair.getReserves();
-            uint256 lResult = lPair.getTimeWeightedAverage(lQuery.priceType, lQuery.secs, lQuery.ago, lIndex);
-            rResults[i] = lResult;
+            rResults[i] = _getTimeWeightedAverageSingle(aQueries[i]);
         }
+    }
+
+    function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery)
+        private
+        view
+        returns (uint256 rResult)
+    {
+        ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
+        _validatePair(lPair);
+
+        (,,, uint16 lIndex) = lPair.getReserves();
+        rResult = lPair.getTimeWeightedAverage(aQuery.priceType, aQuery.secs, aQuery.ago, lIndex);
     }
 
     /// @inheritdoc IReservoirPriceOracle
