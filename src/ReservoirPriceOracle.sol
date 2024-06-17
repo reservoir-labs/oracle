@@ -35,7 +35,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event FallbackOracleSet(address fallbackOracle);
     event PriceDeviationThreshold(uint256 newThreshold);
-    event ResolvedVaultSet(address vault, address asset);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
     event TwapPeriod(uint256 newPeriod);
@@ -66,10 +65,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
-
-    // TODO: Why is this needed?
-    /// @notice ERC4626 vaults resolved using internal pricing (`convertToAssets`).
-    mapping(address vault => address asset) public resolvedVaults;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                CONSTRUCTOR, FALLBACKS                                     //
@@ -149,13 +144,15 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
             (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
-            uint256 lNewPrice = _getTimeWeightedAverageSingle(OracleAverageQuery(
-                PRICE_TYPE,
-                lToken0,
-                lToken1,
-                twapPeriod,
-                0 // now
-            ));
+            uint256 lNewPrice = _getTimeWeightedAverageSingle(
+                OracleAverageQuery(
+                    PRICE_TYPE,
+                    lToken0,
+                    lToken1,
+                    twapPeriod,
+                    0 // now
+                )
+            );
 
             // assumed to be simple routes and therefore lPrevPrice would only be 0 for the first update
             // consider an optimization here for simple routes: no need to read the price cache again
@@ -183,11 +180,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery)
-        private
-        view
-        returns (uint256 rResult)
-    {
+    function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) private view returns (uint256 rResult) {
         ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
         _validatePair(lPair);
 
@@ -388,15 +381,18 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
-        // route does not exist on our oracle, attempt querying the fallback
         if (lRoute.length == 0) {
-            address lBaseAsset = resolvedVaults[aBase];
-
-            if (lBaseAsset != address(0)) {
+            // There is one case where the behavior is a bit more unexpected, and that is when
+            // `aBase` is an empty contract, and the revert would not be caught at all, causing
+            // the entire operation to fail. But this is okay, because if `aBase` is not a contract, trying
+            // to use the fallbackOracle would not yield any results anyway.
+            // An alternative would be to use a low level `staticcall`.
+            try IERC4626(aBase).asset() returns (address rBaseAsset) {
                 uint256 lResolvedAmountIn = IERC4626(aBase).convertToAssets(aAmount);
-                return _getQuotes(lResolvedAmountIn, lBaseAsset, aQuote, aIsGetQuotes);
-            }
+                return _getQuotes(lResolvedAmountIn, rBaseAsset, aQuote, aIsGetQuotes);
+            } catch { } // solhint-disable-line no-empty-blocks
 
+            // route does not exist on our oracle, attempt querying the fallback
             return _useFallbackOracle(aAmount, aBase, aQuote, aIsGetQuotes);
         } else if (lRoute.length == 2) {
             if (lPrice == 0) revert OracleErrors.PriceZero();
@@ -510,14 +506,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         delete pairs[aToken0][aToken1];
         emit DesignatePair(aToken0, aToken1, ReservoirPair(address(0)));
-    }
-
-    // TODO: What's the use case for these vaults? Is it to price wrapped tokens
-    // without needing a market?
-    function setResolvedVault(address aVault, bool aSet) external onlyOwner {
-        address lAsset = aSet ? IERC4626(aVault).asset() : address(0);
-        resolvedVaults[aVault] = lAsset;
-        emit ResolvedVaultSet(aVault, lAsset);
     }
 
     /// @notice Sets the price route between aToken0 and aToken1, and also intermediate routes if previously undefined

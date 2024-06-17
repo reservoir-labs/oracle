@@ -415,7 +415,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         // arrange
         uint256 lAmtIn = 5e18;
         StubERC4626 lVault = new StubERC4626(address(_tokenA), lRate);
-        _oracle.setResolvedVault(address(lVault), true);
         _writePriceCache(address(_tokenA), address(_tokenB), 1e18);
 
         // act
@@ -1064,7 +1063,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testGetQuote_NoFallbackOracle() external {
         // act & assert
         vm.expectRevert(OracleErrors.NoPath.selector);
-        _oracle.getQuote(123, address(123), address(456));
+        _oracle.getQuote(123, address(_tokenD), address(_tokenA));
     }
 
     function testGetQuote_PriceZero() external {
