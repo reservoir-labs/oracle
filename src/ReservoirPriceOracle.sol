@@ -146,37 +146,26 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert OracleErrors.NoPath();
 
-        OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](lRoute.length - 1);
-
-        uint256[] memory lNewPrices = new uint256[](lRoute.length - 1);
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
             (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
-            lNewPrices[i] = _getTimeWeightedAverageSingle(OracleAverageQuery(
+            uint256 lNewPrice = _getTimeWeightedAverageSingle(OracleAverageQuery(
                 PRICE_TYPE,
                 lToken0,
                 lToken1,
                 twapPeriod,
                 0 // now
             ));
-        }
-
-        for (uint256 i = 0; i < lNewPrices.length; ++i) {
-            address lBase = lQueries[i].base;
-            address lQuote = lQueries[i].quote;
-            uint256 lNewPrice = lNewPrices[i];
 
             // assumed to be simple routes and therefore lPrevPrice would only be 0 for the first update
             // consider an optimization here for simple routes: no need to read the price cache again
             // as it has been returned by _getRouteDecimalDifferencePrice in the beginning of the function
-            (uint256 lPrevPrice,) = _priceCache(lBase, lQuote);
-
+            (uint256 lPrevPrice,) = _priceCache(lToken0, lToken1);
             // determine if price has moved beyond the threshold, and pay out reward if so
             if (_calcPercentageDiff(lPrevPrice, lNewPrice) >= priceDeviationThreshold) {
                 _rewardUpdater(aRewardRecipient);
             }
-
-            _writePriceCache(lBase, lQuote, lNewPrice);
+            _writePriceCache(lToken0, lToken1, lNewPrice);
         }
     }
 
@@ -189,8 +178,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         returns (uint256[] memory rResults)
     {
         rResults = new uint256[](aQueries.length);
-
-        OracleAverageQuery memory lQuery;
         for (uint256 i = 0; i < aQueries.length; ++i) {
             rResults[i] = _getTimeWeightedAverageSingle(aQueries[i]);
         }
