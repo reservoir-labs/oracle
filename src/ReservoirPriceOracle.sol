@@ -180,14 +180,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) private view returns (uint256 rResult) {
-        ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
-        _validatePair(lPair);
-
-        (,,, uint16 lIndex) = lPair.getReserves();
-        rResult = lPair.getTimeWeightedAverage(aQuery.priceType, aQuery.secs, aQuery.ago, lIndex);
-    }
-
     /// @inheritdoc IReservoirPriceOracle
     function getLatest(OracleLatestQuery calldata aQuery) external view returns (uint256) {
         ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
@@ -229,6 +221,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     function _validatePair(ReservoirPair aPair) internal pure {
         if (address(aPair) == address(0)) revert OracleErrors.NoDesignatedPair();
+    }
+
+    function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) internal view returns (uint256 rResult) {
+        ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
+        _validatePair(lPair);
+
+        (,,, uint16 lIndex) = lPair.getReserves();
+        rResult = lPair.getTimeWeightedAverage(aQuery.priceType, aQuery.secs, aQuery.ago, lIndex);
     }
 
     // TODO: replace this with safe, audited lib function
