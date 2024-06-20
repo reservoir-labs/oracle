@@ -6,6 +6,7 @@ import { BaseTest, console2, ReservoirPair, MintableERC20 } from "test/__fixture
 import { Utils } from "src/libraries/Utils.sol";
 import {
     Buffer,
+    FixedPointMathLib,
     PriceType,
     OracleErrors,
     OracleLatestQuery,
@@ -27,6 +28,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     using FlagsLib for *;
     using Bytes32Lib for *;
     using EnumerableSetLib for EnumerableSetLib.AddressSet;
+    using FixedPointMathLib for uint256;
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event Oracle(address newOracle);
@@ -282,8 +284,8 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // assert
         uint256 lExpectedAmt = lTokenA < lTokenB
-            ? lAmtIn * 10 ** lTokenADecimal * lPrice * 10 ** lTokenBDecimal / 10 ** lTokenADecimal / WAD
-            : lAmtIn * 10 ** lTokenADecimal * WAD * 10 ** lTokenBDecimal / lPrice / 10 ** lTokenADecimal;
+            ? (lAmtIn * 10 ** lTokenADecimal).fullMulDiv(lPrice * 10 ** lTokenBDecimal, 10 ** lTokenADecimal * WAD)
+            : (lAmtIn * 10 ** lTokenADecimal).fullMulDiv(WAD * 10 ** lTokenBDecimal, lPrice * 10 ** lTokenADecimal);
 
         assertEq(lAmtBOut, lExpectedAmt);
     }
@@ -349,11 +351,11 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // assert
         uint256 lExpectedAmtBOut = lTokenA < lTokenB
-            ? lAmtIn * 10 ** lTokenADecimal * lPrice1 * 10 ** lTokenBDecimal / 10 ** lTokenADecimal / WAD
-            : lAmtIn * 10 ** lTokenADecimal * WAD * 10 ** lTokenBDecimal / lPrice1 / 10 ** lTokenADecimal;
+            ? (lAmtIn * 10 ** lTokenADecimal).fullMulDiv(lPrice1 * 10 ** lTokenBDecimal, 10 ** lTokenADecimal * WAD)
+            : (lAmtIn * 10 ** lTokenADecimal).fullMulDiv(WAD * 10 ** lTokenBDecimal, lPrice1 * 10 ** lTokenADecimal);
         uint256 lExpectedAmtCOut = lTokenB < lTokenC
-            ? lExpectedAmtBOut * lPrice2 * 10 ** lTokenCDecimal / 10 ** lTokenBDecimal / WAD
-            : lExpectedAmtBOut * WAD * 10 ** lTokenCDecimal / lPrice2 / 10 ** lTokenBDecimal;
+            ? (lExpectedAmtBOut).fullMulDiv(lPrice2 * 10 ** lTokenCDecimal, 10 ** lTokenBDecimal * WAD)
+            : (lExpectedAmtBOut).fullMulDiv(WAD * 10 ** lTokenCDecimal, lPrice2 * 10 ** lTokenBDecimal);
 
         assertEq(lAmtCOut, lExpectedAmtCOut);
     }
@@ -413,7 +415,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         // arrange
         uint256 lAmtIn = 5e18;
         StubERC4626 lVault = new StubERC4626(address(_tokenA), lRate);
-        _oracle.setResolvedVault(address(lVault), true);
         _writePriceCache(address(_tokenA), address(_tokenB), 1e18);
 
         // act
@@ -925,7 +926,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testDesignatePair_IncorrectPair() external {
         // act & assert
-        vm.expectRevert();
+        vm.expectRevert(OracleErrors.IncorrectTokensDesignatePair.selector);
         _oracle.designatePair(address(_tokenA), address(_tokenC), _pair);
     }
 
@@ -981,12 +982,6 @@ contract ReservoirPriceOracleTest is BaseTest {
             )
         );
         _oracle.updatePrice(address(_tokenB), address(_tokenC), address(0));
-    }
-
-    function setPriceType() external {
-        vm.prank(address(123));
-        vm.expectRevert("UNAUTHORIZED");
-        _oracle.setPriceType(PriceType.RAW_PRICE);
     }
 
     function testSetRoute_SameToken() external {
@@ -1068,7 +1063,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testGetQuote_NoFallbackOracle() external {
         // act & assert
         vm.expectRevert(OracleErrors.NoPath.selector);
-        _oracle.getQuote(123, address(123), address(456));
+        _oracle.getQuote(123, address(_tokenD), address(_tokenA));
     }
 
     function testGetQuote_PriceZero() external {

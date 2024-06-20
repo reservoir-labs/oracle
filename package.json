@@ -53,7 +53,7 @@
     "submodule:check": "cd lib && find . -mindepth 1 -maxdepth 1 -type d -exec bash -c 'cd \"{}\" && pwd && ../../scripts/git-master-diff.sh && echo' \\;",
     "submodule:reset": "git submodule update --recursive",
     "test": "npm run test:unit",
-    "test:all": "npm run test:unit && npm run test:integration",
+    "test:all": "npm run test:unit && npm run test:unit-large && npm run test:integration",
     "test:integration": "export FOUNDRY_PROFILE=integration && forge test",
     "test:unit": "forge test",
     "test:unit-large": "export FOUNDRY_PROFILE=large-test && forge test"

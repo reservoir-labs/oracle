@@ -35,12 +35,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event FallbackOracleSet(address fallbackOracle);
     event PriceDeviationThreshold(uint256 newThreshold);
-    event ResolvedVaultSet(address vault, address asset);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
-    event Price(address token0, address token1, uint256 price);
-    event SetPriceType(PriceType priceType);
     event TwapPeriod(uint256 newPeriod);
+
+    /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
+    PriceType public immutable PRICE_TYPE;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                        STORAGE                                            //
@@ -50,28 +50,21 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @dev If `address(0)` then there is no fallback.
     address public fallbackOracle;
 
-    /// @dev the following 4 storage variables take up 1 storage slot
+    // The following 3 storage variables take up 1 storage slot.
 
     /// @notice percentage change greater than which, a price update may result in a reward payout of native tokens,
     /// subject to availability of rewards.
     /// 1e18 == 100%
     uint64 public priceDeviationThreshold;
 
-    /// @notice multiples of the base fee the contract rewards the caller for updating the price when it goes
-    /// beyond the `priceDeviationThreshold`
+    /// @notice This number is multiplied by the base fee to determine the reward for keepers
     uint64 public rewardGasAmount;
 
     /// @notice TWAP period (in seconds) for querying the oracle
     uint64 public twapPeriod;
 
-    /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
-    PriceType public priceType;
-
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
-
-    /// @notice ERC4626 vaults resolved using internal pricing (`convertToAssets`).
-    mapping(address vault => address asset) public resolvedVaults;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                CONSTRUCTOR, FALLBACKS                                     //
@@ -81,7 +74,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         updatePriceDeviationThreshold(aThreshold);
         updateTwapPeriod(aTwapPeriod);
         updateRewardGasAmount(aMultiplier);
-        setPriceType(aType);
+        PRICE_TYPE = aType;
     }
 
     /// @dev contract will hold native tokens to be distributed as gas bounty for updating the prices
@@ -148,38 +141,28 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert OracleErrors.NoPath();
 
-        OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](lRoute.length - 1);
-
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
             (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
 
-            lQueries[i] = OracleAverageQuery(
-                priceType,
-                lToken0,
-                lToken1,
-                twapPeriod,
-                0 // now
+            uint256 lNewPrice = _getTimeWeightedAverageSingle(
+                OracleAverageQuery(
+                    PRICE_TYPE,
+                    lToken0,
+                    lToken1,
+                    twapPeriod,
+                    0 // now
+                )
             );
-        }
-
-        uint256[] memory lNewPrices = getTimeWeightedAverage(lQueries);
-
-        for (uint256 i = 0; i < lNewPrices.length; ++i) {
-            address lBase = lQueries[i].base;
-            address lQuote = lQueries[i].quote;
-            uint256 lNewPrice = lNewPrices[i];
 
             // assumed to be simple routes and therefore lPrevPrice would only be 0 for the first update
             // consider an optimization here for simple routes: no need to read the price cache again
             // as it has been returned by _getRouteDecimalDifferencePrice in the beginning of the function
-            (uint256 lPrevPrice,) = _priceCache(lBase, lQuote);
-
+            (uint256 lPrevPrice,) = _priceCache(lToken0, lToken1);
             // determine if price has moved beyond the threshold, and pay out reward if so
             if (_calcPercentageDiff(lPrevPrice, lNewPrice) >= priceDeviationThreshold) {
                 _rewardUpdater(aRewardRecipient);
             }
-
-            _writePriceCache(lBase, lQuote, lNewPrice);
+            _writePriceCache(lToken0, lToken1, lNewPrice);
         }
     }
 
@@ -192,16 +175,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         returns (uint256[] memory rResults)
     {
         rResults = new uint256[](aQueries.length);
-
-        OracleAverageQuery memory lQuery;
         for (uint256 i = 0; i < aQueries.length; ++i) {
-            lQuery = aQueries[i];
-            ReservoirPair lPair = pairs[lQuery.base][lQuery.quote];
-            _validatePair(lPair);
-
-            (,,, uint16 lIndex) = lPair.getReserves();
-            uint256 lResult = lPair.getTimeWeightedAverage(lQuery.priceType, lQuery.secs, lQuery.ago, lIndex);
-            rResults[i] = lResult;
+            rResults[i] = _getTimeWeightedAverageSingle(aQueries[i]);
         }
     }
 
@@ -246,6 +221,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     function _validatePair(ReservoirPair aPair) internal pure {
         if (address(aPair) == address(0)) revert OracleErrors.NoDesignatedPair();
+    }
+
+    function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) internal view returns (uint256 rResult) {
+        ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
+        _validatePair(lPair);
+
+        (,,, uint16 lIndex) = lPair.getReserves();
+        rResult = lPair.getTimeWeightedAverage(aQuery.priceType, aQuery.secs, aQuery.ago, lIndex);
     }
 
     // TODO: replace this with safe, audited lib function
@@ -398,15 +381,18 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
-        // route does not exist on our oracle, attempt querying the fallback
         if (lRoute.length == 0) {
-            address lBaseAsset = resolvedVaults[aBase];
-
-            if (lBaseAsset != address(0)) {
+            // There is one case where the behavior is a bit more unexpected, and that is when
+            // `aBase` is an empty contract, and the revert would not be caught at all, causing
+            // the entire operation to fail. But this is okay, because if `aBase` is not a contract, trying
+            // to use the fallbackOracle would not yield any results anyway.
+            // An alternative would be to use a low level `staticcall`.
+            try IERC4626(aBase).asset() returns (address rBaseAsset) {
                 uint256 lResolvedAmountIn = IERC4626(aBase).convertToAssets(aAmount);
-                return _getQuotes(lResolvedAmountIn, lBaseAsset, aQuote, aIsGetQuotes);
-            }
+                return _getQuotes(lResolvedAmountIn, rBaseAsset, aQuote, aIsGetQuotes);
+            } catch { } // solhint-disable-line no-empty-blocks
 
+            // route does not exist on our oracle, attempt querying the fallback
             return _useFallbackOracle(aAmount, aBase, aQuote, aIsGetQuotes);
         } else if (lRoute.length == 2) {
             if (lPrice == 0) revert OracleErrors.PriceZero();
@@ -504,13 +490,15 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         emit RewardGasAmount(aNewMultiplier);
     }
 
-    // sets a specific pair to serve as price feed for a certain route
-    function designatePair(address aToken0, address aToken1, ReservoirPair aPair) external onlyOwner {
-        (aToken0, aToken1) = aToken0.sortTokens(aToken1);
-        assert(aToken0 == address(aPair.token0()) && aToken1 == address(aPair.token1()));
+    /// @notice Sets the pair to serve as price feed for a given route.
+    function designatePair(address aTokenA, address aTokenB, ReservoirPair aPair) external onlyOwner {
+        (aTokenA, aTokenB) = aTokenA.sortTokens(aTokenB);
+        if (aTokenA != address(aPair.token0()) || aTokenB != address(aPair.token1())) {
+            revert OracleErrors.IncorrectTokensDesignatePair();
+        }
 
-        pairs[aToken0][aToken1] = aPair;
-        emit DesignatePair(aToken0, aToken1, aPair);
+        pairs[aTokenA][aTokenB] = aPair;
+        emit DesignatePair(aTokenA, aTokenB, aPair);
     }
 
     function undesignatePair(address aToken0, address aToken1) external onlyOwner {
@@ -518,17 +506,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         delete pairs[aToken0][aToken1];
         emit DesignatePair(aToken0, aToken1, ReservoirPair(address(0)));
-    }
-
-    function setPriceType(PriceType aType) public onlyOwner {
-        priceType = aType;
-        emit SetPriceType(aType);
-    }
-
-    function setResolvedVault(address aVault, bool aSet) external onlyOwner {
-        address lAsset = aSet ? IERC4626(aVault).asset() : address(0);
-        resolvedVaults[aVault] = lAsset;
-        emit ResolvedVaultSet(aVault, lAsset);
     }
 
     /// @notice Sets the price route between aToken0 and aToken1, and also intermediate routes if previously undefined
@@ -593,12 +570,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         bytes32 lSlot = aToken0.calculateSlot(aToken1);
 
-        // clear all storage slots that the route has written to previously
+        // clear the storage slot that the route has written to previously
         assembly {
             sstore(lSlot, 0)
         }
-        // routes with length 4 use two words of storage
-        if (lRoute.length == 4) {
+
+        // routes with length MAX_ROUTE_LENGTH use one more word of storage
+        // `setRoute` enforces the MAX_ROUTE_LENGTH limit.
+        if (lRoute.length == Constants.MAX_ROUTE_LENGTH) {
             assembly {
                 sstore(add(lSlot, 1), 0)
             }
