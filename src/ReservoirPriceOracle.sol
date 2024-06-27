@@ -138,7 +138,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) public nonReentrant {
         (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
 
-        (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
+        (address[] memory lRoute,, uint256 lPrevPrice) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert OracleErrors.NoPath();
 
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
@@ -154,10 +154,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 )
             );
 
-            // assumed to be simple routes and therefore lPrevPrice would only be 0 for the first update
-            // consider an optimization here for simple routes: no need to read the price cache again
-            // as it has been returned by _getRouteDecimalDifferencePrice in the beginning of the function
-            (uint256 lPrevPrice,) = _priceCache(lToken0, lToken1);
+            // if it's a simple route, we avoid loading the price again from storage
+            if (lRoute.length != 2) (lPrevPrice,) = _priceCache(lToken0, lToken1);
 
             _writePriceCache(lToken0, lToken1, lNewPrice);
 
