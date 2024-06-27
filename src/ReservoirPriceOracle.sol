@@ -158,11 +158,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             // consider an optimization here for simple routes: no need to read the price cache again
             // as it has been returned by _getRouteDecimalDifferencePrice in the beginning of the function
             (uint256 lPrevPrice,) = _priceCache(lToken0, lToken1);
+
+            _writePriceCache(lToken0, lToken1, lNewPrice);
+
             // determine if price has moved beyond the threshold, and pay out reward if so
             if (_calcPercentageDiff(lPrevPrice, lNewPrice) >= priceDeviationThreshold) {
                 _rewardUpdater(aRewardRecipient);
             }
-            _writePriceCache(lToken0, lToken1, lNewPrice);
         }
     }
 
@@ -231,14 +233,17 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         rResult = lPair.getTimeWeightedAverage(aQuery.priceType, aQuery.secs, aQuery.ago, lIndex);
     }
 
-    // TODO: replace this with safe, audited lib function
     function _calcPercentageDiff(uint256 aOriginal, uint256 aNew) internal pure returns (uint256) {
-        if (aOriginal == 0) return 0;
+        unchecked {
+            if (aOriginal == 0) return 0;
 
-        if (aOriginal > aNew) {
-            return (aOriginal - aNew) * 1e18 / aOriginal;
-        } else {
-            return (aNew - aOriginal) * 1e18 / aOriginal;
+            // multiplication does not overflow as `aOriginal` and `aNew` is always less than or
+            // equal to `Constants.MAX_SUPPORTED_PRICE`, as checked in `_writePriceCache`
+            if (aOriginal > aNew) {
+                return (aOriginal - aNew) * 1e18 / aOriginal;
+            } else {
+                return (aNew - aOriginal) * 1e18 / aOriginal;
+            }
         }
     }
 
