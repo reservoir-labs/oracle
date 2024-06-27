@@ -26,6 +26,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     using LibSort for address[];
     using FlagsLib for *;
     using QueryProcessor for ReservoirPair;
+    // REVIEW: It doesn't make sense for calculateSlot to be attached to address
+    // as it is a function that maps `(addr, addr) -> u256`, not anything that
+    // operates on a single `address`.
     using Utils for *;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -249,10 +252,17 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aRecipient == address(0)) return;
 
         // N.B. Revisit this whenever deployment on a new chain is needed
-        // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()` on ARB because the latter will always return
-        // the demand insensitive base fee, while the former can return real higher fees during times of congestion
-        // safety: this mul will not overflow even in extreme cases of `block.basefee`
-        uint256 lPayoutAmt = block.basefee * rewardGasAmount;
+        //
+        // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()`
+        // on ARB because the latter will always return the demand insensitive
+        // base fee, while the former can return higher fees during times of
+        // congestion
+
+        // SAFETY: this mul will not overflow even in extreme cases of `block.basefee`.
+        uint256 lPayoutAmt;
+        unchecked {
+            lPayoutAmt = block.basefee * rewardGasAmount;
+        }
 
         if (lPayoutAmt <= address(this).balance) {
             payable(aRecipient).transfer(lPayoutAmt);
@@ -385,6 +395,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
         if (lRoute.length == 0) {
+            // REVIEW: Is it possible for `aQuote` to be an IERC4626?
             // There is one case where the behavior is a bit more unexpected, and that is when
             // `aBase` is an empty contract, and the revert would not be caught at all, causing
             // the entire operation to fail. But this is okay, because if `aBase` is not a contract, trying
@@ -533,7 +544,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            bytes32 lData = lDiff.packSimplePrice(0);
+            bytes32 lData = lDiff.packSimplePice(0);
             assembly {
                 // Write data to storage.
                 sstore(lSlot, lData)
@@ -545,6 +556,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lThirdToken = aRoute[2];
 
             if (lRouteLength == 3) {
+                // REVIEW: I'm not sure how these 2 or 3 hop routes work? As far
+                // as I can tell only a single address gets written to storage?
+                // What am I missing?
                 bytes32 lData = lSecondToken.pack2HopRoute();
                 assembly {
                     sstore(lSlot, lData)

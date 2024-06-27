@@ -41,6 +41,7 @@ interface IReservoirPriceOracle {
      */
     function getLatest(OracleLatestQuery calldata priceType) external view returns (uint256);
 
+    // REVIEW: Who calls this?
     /**
      * @dev Returns largest time window that can be safely queried, where 'safely' means the Oracle is guaranteed to be
      * able to produce a result and not revert.
@@ -53,6 +54,7 @@ interface IReservoirPriceOracle {
      */
     function getLargestSafeQueryWindow() external view returns (uint256);
 
+    // REVIEW: Who calls this?
     /**
      * @dev Returns the accumulators corresponding to each of `queries`.
      */
