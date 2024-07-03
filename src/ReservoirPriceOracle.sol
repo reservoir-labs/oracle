@@ -541,7 +541,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            bytes32 lData = lDiff.packSimplePice(0);
+            bytes32 lData = lDiff.packSimplePrice(0);
             assembly {
                 // Write data to storage.
                 sstore(lSlot, lData)
