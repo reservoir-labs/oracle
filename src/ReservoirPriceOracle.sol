@@ -26,10 +26,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     using LibSort for address[];
     using FlagsLib for *;
     using QueryProcessor for ReservoirPair;
-    // REVIEW: It doesn't make sense for calculateSlot to be attached to address
-    // as it is a function that maps `(addr, addr) -> u256`, not anything that
-    // operates on a single `address`.
-    using Utils for *;
+    using Utils for address;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       EVENTS                                              //
@@ -279,7 +276,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice)
     {
         address[] memory lResults = new address[](Constants.MAX_ROUTE_LENGTH);
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lFirstWord;
         uint256 lRouteLength;
@@ -333,7 +330,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function _checkAndPopulateIntermediateRoute(address aToken0, address aToken1) internal {
         (address lLowerToken, address lHigherToken) = aToken0.sortTokens(aToken1);
 
-        bytes32 lSlot = lLowerToken.calculateSlot(lHigherToken);
+        bytes32 lSlot = Utils.calculateSlot(lLowerToken, lHigherToken);
         bytes32 lData;
         assembly {
             lData := sload(lSlot)
@@ -352,7 +349,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         view
         returns (uint256 rPrice, int256 rDecimalDiff)
     {
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lData;
         assembly {
@@ -367,7 +364,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function _writePriceCache(address aToken0, address aToken1, uint256 aNewPrice) internal {
         if (aNewPrice == 0 || aNewPrice > Constants.MAX_SUPPORTED_PRICE) revert OracleErrors.PriceOutOfRange(aNewPrice);
 
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
         bytes32 lData;
         assembly {
             lData := sload(lSlot)
@@ -534,7 +531,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (lRouteLength > Constants.MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
         if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
 
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         // simple route
         if (lRouteLength == 2) {
@@ -585,7 +582,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
 
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         // clear the storage slot that the route has written to previously
         assembly {
