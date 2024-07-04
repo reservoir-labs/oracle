@@ -526,9 +526,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lThirdToken = aRoute[2];
 
             if (lRouteLength == 3) {
-                // REVIEW: I'm not sure how these 2 or 3 hop routes work? As far
-                // as I can tell only a single address gets written to storage?
-                // What am I missing?
                 bytes32 lData = lSecondToken.pack2HopRoute();
                 assembly {
                     sstore(lSlot, lData)
