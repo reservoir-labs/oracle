@@ -190,31 +190,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         return lResult;
     }
 
-    /// @inheritdoc IReservoirPriceOracle
-    function getPastAccumulators(OracleAccumulatorQuery[] memory aQueries)
-        external
-        view
-        returns (int256[] memory rResults)
-    {
-        rResults = new int256[](aQueries.length);
-
-        OracleAccumulatorQuery memory lQuery;
-        for (uint256 i = 0; i < aQueries.length; ++i) {
-            lQuery = aQueries[i];
-            ReservoirPair lPair = pairs[lQuery.base][lQuery.quote];
-            _validatePair(lPair);
-
-            (,,, uint16 lIndex) = lPair.getReserves();
-            int256 lAcc = lPair.getPastAccumulator(lQuery.priceType, lIndex, lQuery.ago);
-            rResults[i] = lAcc;
-        }
-    }
-
-    /// @inheritdoc IReservoirPriceOracle
-    function getLargestSafeQueryWindow() external pure returns (uint256) {
-        return Buffer.SIZE;
-    }
-
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                 INTERNAL FUNCTIONS                                        //
     ///////////////////////////////////////////////////////////////////////////////////////////////
