@@ -5,12 +5,10 @@ import { BaseTest, console2, ReservoirPair, MintableERC20 } from "test/__fixture
 
 import { Utils } from "src/libraries/Utils.sol";
 import {
-    Buffer,
     FixedPointMathLib,
     PriceType,
     OracleErrors,
     OracleLatestQuery,
-    OracleAccumulatorQuery,
     OracleAverageQuery,
     ReservoirPriceOracle,
     IERC20,

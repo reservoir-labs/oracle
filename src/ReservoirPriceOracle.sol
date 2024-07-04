@@ -8,7 +8,7 @@ import { OracleErrors } from "src/libraries/OracleErrors.sol";
 import {
     IReservoirPriceOracle,
     OracleAverageQuery,
-    OracleLatestQuery,
+    OracleLatestQuery
 } from "src/interfaces/IReservoirPriceOracle.sol";
 import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
 import { QueryProcessor, ReservoirPair, PriceType } from "src/libraries/QueryProcessor.sol";
@@ -277,7 +277,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 assembly {
                     lSecondWord := sload(add(lSlot, 1))
                 }
-                address lThirdToken = lFirstWord.getThirdToken(lSecondWord);
+                address lThirdToken = lSecondWord.getThirdToken();
 
                 lResults[2] = lThirdToken;
                 lResults[3] = aToken1;
