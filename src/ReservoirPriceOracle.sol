@@ -9,10 +9,9 @@ import {
     IReservoirPriceOracle,
     OracleAverageQuery,
     OracleLatestQuery,
-    OracleAccumulatorQuery
 } from "src/interfaces/IReservoirPriceOracle.sol";
 import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
-import { QueryProcessor, ReservoirPair, Buffer, PriceType } from "src/libraries/QueryProcessor.sol";
+import { QueryProcessor, ReservoirPair, PriceType } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
@@ -26,7 +25,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     using LibSort for address[];
     using FlagsLib for *;
     using QueryProcessor for ReservoirPair;
-    using Utils for address;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       EVENTS                                              //
@@ -136,13 +134,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
     /// @param aRewardRecipient The beneficiary of the reward. Must be able to receive ether. Set to address(0) if not seeking a reward
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) public nonReentrant {
-        (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
+        (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
         (address[] memory lRoute,, uint256 lPrevPrice) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert OracleErrors.NoPath();
 
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
-            (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
+            (lToken0, lToken1) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
 
             uint256 lNewPrice = _getTimeWeightedAverageSingle(
                 OracleAverageQuery(
@@ -303,7 +301,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// route. If there isn't an existing route, we write it as well.
     /// @dev assumed that aToken0 and aToken1 are not necessarily sorted
     function _checkAndPopulateIntermediateRoute(address aToken0, address aToken1) internal {
-        (address lLowerToken, address lHigherToken) = aToken0.sortTokens(aToken1);
+        (address lLowerToken, address lHigherToken) = Utils.sortTokens(aToken0, aToken1);
 
         bytes32 lSlot = Utils.calculateSlot(lLowerToken, lHigherToken);
         bytes32 lData;
@@ -362,7 +360,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aBase == aQuote) return (aAmount, aAmount);
         if (aAmount > Constants.MAX_AMOUNT_IN) revert OracleErrors.AmountInTooLarge();
 
-        (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
+        (address lToken0, address lToken1) = Utils.sortTokens(aBase, aQuote);
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
@@ -393,7 +391,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             assert(lRoute[0] == aBase);
 
             for (uint256 i = 0; i < lRoute.length - 1; ++i) {
-                (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
+                (address lLowerToken, address lHigherToken) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
                 // it is assumed that intermediate routes defined here are simple routes and not composite routes
                 (lPrice, lDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
 
@@ -478,7 +476,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @notice Sets the pair to serve as price feed for a given route.
     function designatePair(address aTokenA, address aTokenB, ReservoirPair aPair) external onlyOwner {
-        (aTokenA, aTokenB) = aTokenA.sortTokens(aTokenB);
+        (aTokenA, aTokenB) = Utils.sortTokens(aTokenA, aTokenB);
         if (aTokenA != address(aPair.token0()) || aTokenB != address(aPair.token1())) {
             revert OracleErrors.IncorrectTokensDesignatePair();
         }
@@ -488,7 +486,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function undesignatePair(address aToken0, address aToken1) external onlyOwner {
-        (aToken0, aToken1) = aToken0.sortTokens(aToken1);
+        (aToken0, aToken1) = Utils.sortTokens(aToken0, aToken1);
 
         delete pairs[aToken0][aToken1];
         emit DesignatePair(aToken0, aToken1, ReservoirPair(address(0)));
