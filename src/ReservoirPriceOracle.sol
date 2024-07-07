@@ -254,29 +254,24 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         view
         returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice)
     {
-        address[] memory lResults = new address[](Constants.MAX_ROUTE_LENGTH);
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lFirstWord;
-        uint256 lRouteLength;
         assembly {
             lFirstWord := sload(lSlot)
         }
 
         // simple route
         if (lFirstWord.isSimplePrice()) {
-            lResults[0] = aToken0;
-            lResults[1] = aToken1;
-            lRouteLength = 2;
+            rRoute = new address[](2);
+            rRoute[0] = aToken0;
+            rRoute[1] = aToken1;
             rDecimalDiff = lFirstWord.getDecimalDifference();
             rPrice = lFirstWord.getPrice();
         }
         // composite route
         else if (lFirstWord.isCompositeRoute()) {
             address lSecondToken = lFirstWord.getTokenFirstWord();
-
-            lResults[0] = aToken0;
-            lResults[1] = lSecondToken;
 
             // REVIEW: Is it more logical to handle `is2HopRoute` then fallback to `assert(is3HopRoute)`?
             if (lFirstWord.is3HopRoute()) {
@@ -286,21 +281,21 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 }
                 address lThirdToken = lSecondWord.getThirdToken();
 
-                lResults[2] = lThirdToken;
-                lResults[3] = aToken1;
-                lRouteLength = 4;
+                rRoute = new address[](4);
+                rRoute[2] = lThirdToken;
+                rRoute[3] = aToken1;
             } else {
-                lResults[2] = aToken1;
-                lRouteLength = 3;
+                rRoute = new address[](3);
+                rRoute[2] = aToken1;
             }
+
+            rRoute[0] = aToken0;
+            rRoute[1] = lSecondToken;
         }
         // no route
         // solhint-disable-next-line no-empty-blocks
-        else if (lFirstWord.isUninitialized()) { }
-
-        rRoute = new address[](lRouteLength);
-        for (uint256 i = 0; i < lRouteLength; ++i) {
-            rRoute[i] = lResults[i];
+        else if (lFirstWord.isUninitialized()) {
+            rRoute = new address[](0);
         }
     }
 
