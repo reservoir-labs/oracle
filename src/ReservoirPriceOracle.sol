@@ -254,7 +254,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lFirstWord;
-        assembly {
+        assembly ("memory-safe") {
             lFirstWord := sload(lSlot)
         }
 
@@ -276,7 +276,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             } else {
                 assert(lFirstWord.is3HopRoute());
                 bytes32 lSecondWord;
-                assembly {
+                assembly ("memory-safe") {
                     lSecondWord := sload(add(lSlot, 1))
                 }
                 address lThirdToken = lSecondWord.getThirdToken();
@@ -302,7 +302,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         bytes32 lSlot = Utils.calculateSlot(lToken0, lToken1);
         bytes32 lData;
-        assembly {
+        assembly ("memory-safe") {
             lData := sload(lSlot)
         }
         if (lData == bytes32(0)) {
@@ -322,7 +322,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lData;
-        assembly {
+        assembly ("memory-safe") {
             lData := sload(lSlot)
         }
         if (lData.isSimplePrice()) {
@@ -336,7 +336,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
         bytes32 lData;
-        assembly {
+        assembly ("memory-safe") {
             lData := sload(lSlot)
         }
         if (!lData.isSimplePrice()) revert OracleErrors.WriteToNonSimpleRoute();
@@ -344,7 +344,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         int256 lDiff = lData.getDecimalDifference();
 
         lData = RoutesLib.packSimplePrice(lDiff, aNewPrice);
-        assembly {
+        assembly ("memory-safe") {
             sstore(lSlot, lData)
         }
     }
@@ -510,7 +510,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
             bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0);
-            assembly {
+            assembly ("memory-safe") {
                 // Write data to storage.
                 sstore(lSlot, lData)
             }
@@ -522,14 +522,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
             if (lRouteLength == 3) {
                 bytes32 lData = RoutesLib.pack2HopRoute(lSecondToken);
-                assembly {
+                assembly ("memory-safe") {
                     sstore(lSlot, lData)
                 }
             } else if (lRouteLength == 4) {
                 (bytes32 lFirstWord, bytes32 lSecondWord) = RoutesLib.pack3HopRoute(lSecondToken, lThirdToken);
 
                 // Write two words to storage.
-                assembly {
+                assembly ("memory-safe") {
                     sstore(lSlot, lFirstWord)
                     sstore(add(lSlot, 1), lSecondWord)
                 }
@@ -549,14 +549,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         // clear the storage slot that the route has written to previously
-        assembly {
+        assembly ("memory-safe") {
             sstore(lSlot, 0)
         }
 
         // routes with length MAX_ROUTE_LENGTH use one more word of storage
         // `setRoute` enforces the MAX_ROUTE_LENGTH limit.
         if (lRoute.length == Constants.MAX_ROUTE_LENGTH) {
-            assembly {
+            assembly ("memory-safe") {
                 sstore(add(lSlot, 1), 0)
             }
         }

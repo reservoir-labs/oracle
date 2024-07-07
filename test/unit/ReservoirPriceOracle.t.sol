@@ -643,8 +643,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(lPrice, 98_918_868_099_219_913_512);
         (lPrice,) = _oracle.priceCache(address(_tokenB), address(_tokenA));
         assertEq(lPrice, 0);
-        assertEq(address(this).balance, block.basefee * _oracle.rewardGasAmount());
-        assertEq(address(_oracle).balance, 1 ether - block.basefee * _oracle.rewardGasAmount());
+        assertEq(address(lGasBuster).balance, 0);
+        assertEq(address(_oracle).balance, 1 ether);
     }
 
     function testSetRoute() public {
