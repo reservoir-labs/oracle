@@ -365,7 +365,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
         if (lRoute.length == 0) {
-            // REVIEW: Is it possible for `aQuote` to be an IERC4626?
             // There is one case where the behavior is a bit more unexpected, and that is when
             // `aBase` is an empty contract, and the revert would not be caught at all, causing
             // the entire operation to fail. But this is okay, because if `aBase` is not a contract, trying
