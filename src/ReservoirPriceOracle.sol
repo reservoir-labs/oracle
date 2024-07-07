@@ -278,6 +278,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             lResults[0] = aToken0;
             lResults[1] = lSecondToken;
 
+            // REVIEW: Is it more logical to handle `is2HopRoute` then fallback to `assert(is3HopRoute)`?
             if (lFirstWord.is3HopRoute()) {
                 bytes32 lSecondWord;
                 assembly {
@@ -305,20 +306,19 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// Calculate the storage slot for this intermediate segment and read it to see if there is an existing
     /// route. If there isn't an existing route, we write it as well.
-    /// @dev assumed that aToken0 and aToken1 are not necessarily sorted
-    function _checkAndPopulateIntermediateRoute(address aToken0, address aToken1) internal {
-        (address lLowerToken, address lHigherToken) = Utils.sortTokens(aToken0, aToken1);
+    function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB) private {
+        (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
-        bytes32 lSlot = Utils.calculateSlot(lLowerToken, lHigherToken);
+        bytes32 lSlot = Utils.calculateSlot(lToken0, lToken1);
         bytes32 lData;
         assembly {
             lData := sload(lSlot)
         }
         if (lData == bytes32(0)) {
             address[] memory lIntermediateRoute = new address[](2);
-            lIntermediateRoute[0] = lLowerToken;
-            lIntermediateRoute[1] = lHigherToken;
-            setRoute(lLowerToken, lHigherToken, lIntermediateRoute);
+            lIntermediateRoute[0] = lToken0;
+            lIntermediateRoute[1] = lToken1;
+            setRoute(lToken0, lToken1, lIntermediateRoute);
         }
     }
 
