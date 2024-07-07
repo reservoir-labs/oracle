@@ -5,11 +5,7 @@ import { IERC20 } from "forge-std/interfaces/IERC20.sol";
 import { IERC4626 } from "forge-std/interfaces/IERC4626.sol";
 
 import { OracleErrors } from "src/libraries/OracleErrors.sol";
-import {
-    IReservoirPriceOracle,
-    OracleAverageQuery,
-    OracleLatestQuery
-} from "src/interfaces/IReservoirPriceOracle.sol";
+import { IReservoirPriceOracle, OracleAverageQuery, OracleLatestQuery } from "src/interfaces/IReservoirPriceOracle.sol";
 import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
 import { QueryProcessor, ReservoirPair, PriceType } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
@@ -241,12 +237,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             lPayoutAmt = block.basefee * rewardGasAmount;
         }
 
-        if (lPayoutAmt <= address(this).balance) {
-            // REVIEW: This can still revert, rather than balance checking we
-            // could just try/catch or use Yul to ignore reverts?
-            payable(aRecipient).transfer(lPayoutAmt);
+        // does not revert even if transfer fails
+        assembly ("memory-safe") {
+            let result := call(gas(), aRecipient, lPayoutAmt, codesize(), 0x00, codesize(), 0x00)
         }
-        // do nothing if lPayoutAmt is greater than the balance
     }
 
     /// @return rRoute The route to determine the price between aToken0 and aToken1

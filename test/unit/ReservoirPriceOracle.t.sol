@@ -20,6 +20,7 @@ import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
 import { Constants } from "src/libraries/Constants.sol";
 import { MockFallbackOracle } from "test/mock/MockFallbackOracle.sol";
 import { StubERC4626 } from "test/mock/StubERC4626.sol";
+import { GasBuster } from "test/mock/GasBuster.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
@@ -619,6 +620,31 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertApproxEqRel(lPriceCD, 2e18, 0.0001e18);
         assertApproxEqRel(lPriceBD, 2e18, 0.0001e18);
         assertEq(lPriceAB, 0); // composite price is not stored in the cache
+    }
+
+    function testUpdatePrice_RecipientOutOfGas() external {
+        // arrange
+        GasBuster lGasBuster = new GasBuster();
+
+        _writePriceCache(address(_tokenA), address(_tokenB), 5e18);
+        deal(address(_oracle), 1 ether);
+
+        skip(1);
+        _pair.sync();
+        skip(_oracle.twapPeriod() * 2);
+        _tokenA.mint(address(_pair), 2e18);
+        _pair.swap(2e18, true, address(this), "");
+
+        // act
+        _oracle.updatePrice(address(_tokenB), address(_tokenA), address(lGasBuster));
+
+        // assert
+        (uint256 lPrice,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
+        assertEq(lPrice, 98_918_868_099_219_913_512);
+        (lPrice,) = _oracle.priceCache(address(_tokenB), address(_tokenA));
+        assertEq(lPrice, 0);
+        assertEq(address(this).balance, block.basefee * _oracle.rewardGasAmount());
+        assertEq(address(_oracle).balance, 1 ether - block.basefee * _oracle.rewardGasAmount());
     }
 
     function testSetRoute() public {
