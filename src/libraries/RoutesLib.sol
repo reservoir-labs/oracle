@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-library FlagsLib {
+library RoutesLib {
     bytes32 public constant FLAG_UNINITIALIZED = bytes32(hex"00");
     bytes32 public constant FLAG_SIMPLE_PRICE = bytes32(hex"01");
     bytes32 public constant FLAG_2_HOP_ROUTE = bytes32(hex"02");
@@ -17,6 +17,10 @@ library FlagsLib {
 
     function isCompositeRoute(bytes32 aData) internal pure returns (bool) {
         return aData[0] & hex"02" > 0;
+    }
+
+    function is2HopRoute(bytes32 aData) internal pure returns (bool) {
+        return aData[0] == FLAG_2_HOP_ROUTE;
     }
 
     function is3HopRoute(bytes32 aData) internal pure returns (bool) {

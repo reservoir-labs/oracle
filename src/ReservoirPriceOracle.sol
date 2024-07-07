@@ -18,12 +18,12 @@ import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGu
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
 import { LibSort } from "lib/solady/src/utils/LibSort.sol";
 import { Constants } from "src/libraries/Constants.sol";
-import { FlagsLib } from "src/libraries/FlagsLib.sol";
+import { RoutesLib } from "src/libraries/RoutesLib.sol";
 
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using FixedPointMathLib for uint256;
     using LibSort for address[];
-    using FlagsLib for *;
+    using RoutesLib for bytes32;
     using QueryProcessor for ReservoirPair;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -192,8 +192,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     //                                 INTERNAL FUNCTIONS                                        //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    function _validatePair(ReservoirPair aPair) internal pure {
+    function _validatePair(ReservoirPair aPair) private pure {
         if (address(aPair) == address(0)) revert OracleErrors.NoDesignatedPair();
+    }
+
+    function _validateTokens(address aToken0, address aToken1) private pure {
+        if (aToken1 <= aToken0) revert OracleErrors.InvalidTokensProvided();
     }
 
     function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) internal view returns (uint256 rResult) {
@@ -248,20 +252,18 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         view
         returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice)
     {
-        address[] memory lResults = new address[](Constants.MAX_ROUTE_LENGTH);
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lFirstWord;
-        uint256 lRouteLength;
         assembly {
             lFirstWord := sload(lSlot)
         }
 
         // simple route
         if (lFirstWord.isSimplePrice()) {
-            lResults[0] = aToken0;
-            lResults[1] = aToken1;
-            lRouteLength = 2;
+            rRoute = new address[](2);
+            rRoute[0] = aToken0;
+            rRoute[1] = aToken1;
             rDecimalDiff = lFirstWord.getDecimalDifference();
             rPrice = lFirstWord.getPrice();
         }
@@ -269,50 +271,46 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         else if (lFirstWord.isCompositeRoute()) {
             address lSecondToken = lFirstWord.getTokenFirstWord();
 
-            lResults[0] = aToken0;
-            lResults[1] = lSecondToken;
-
-            if (lFirstWord.is3HopRoute()) {
+            if (lFirstWord.is2HopRoute()) {
+                rRoute = new address[](3);
+                rRoute[2] = aToken1;
+            } else {
+                assert(lFirstWord.is3HopRoute());
                 bytes32 lSecondWord;
                 assembly {
                     lSecondWord := sload(add(lSlot, 1))
                 }
                 address lThirdToken = lSecondWord.getThirdToken();
 
-                lResults[2] = lThirdToken;
-                lResults[3] = aToken1;
-                lRouteLength = 4;
-            } else {
-                lResults[2] = aToken1;
-                lRouteLength = 3;
+                rRoute = new address[](4);
+                rRoute[2] = lThirdToken;
+                rRoute[3] = aToken1;
             }
+
+            rRoute[0] = aToken0;
+            rRoute[1] = lSecondToken;
         }
         // no route
-        // solhint-disable-next-line no-empty-blocks
-        else if (lFirstWord.isUninitialized()) { }
-
-        rRoute = new address[](lRouteLength);
-        for (uint256 i = 0; i < lRouteLength; ++i) {
-            rRoute[i] = lResults[i];
+        else if (lFirstWord.isUninitialized()) {
+            rRoute = new address[](0);
         }
     }
 
     /// Calculate the storage slot for this intermediate segment and read it to see if there is an existing
     /// route. If there isn't an existing route, we write it as well.
-    /// @dev assumed that aToken0 and aToken1 are not necessarily sorted
-    function _checkAndPopulateIntermediateRoute(address aToken0, address aToken1) internal {
-        (address lLowerToken, address lHigherToken) = Utils.sortTokens(aToken0, aToken1);
+    function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB) private {
+        (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
-        bytes32 lSlot = Utils.calculateSlot(lLowerToken, lHigherToken);
+        bytes32 lSlot = Utils.calculateSlot(lToken0, lToken1);
         bytes32 lData;
         assembly {
             lData := sload(lSlot)
         }
         if (lData == bytes32(0)) {
             address[] memory lIntermediateRoute = new address[](2);
-            lIntermediateRoute[0] = lLowerToken;
-            lIntermediateRoute[1] = lHigherToken;
-            setRoute(lLowerToken, lHigherToken, lIntermediateRoute);
+            lIntermediateRoute[0] = lToken0;
+            lIntermediateRoute[1] = lToken1;
+            setRoute(lToken0, lToken1, lIntermediateRoute);
         }
     }
 
@@ -346,7 +344,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         int256 lDiff = lData.getDecimalDifference();
 
-        lData = lDiff.packSimplePrice(aNewPrice);
+        lData = RoutesLib.packSimplePrice(lDiff, aNewPrice);
         assembly {
             sstore(lSlot, lData)
         }
@@ -498,8 +496,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function setRoute(address aToken0, address aToken1, address[] memory aRoute) public onlyOwner {
         uint256 lRouteLength = aRoute.length;
 
-        if (aToken0 == aToken1) revert OracleErrors.SameToken();
-        if (aToken1 < aToken0) revert OracleErrors.TokensUnsorted();
+        _validateTokens(aToken0, aToken1);
         if (lRouteLength > Constants.MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
         if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
 
@@ -513,7 +510,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            bytes32 lData = lDiff.packSimplePrice(0);
+            bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0);
             assembly {
                 // Write data to storage.
                 sstore(lSlot, lData)
@@ -525,12 +522,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lThirdToken = aRoute[2];
 
             if (lRouteLength == 3) {
-                bytes32 lData = lSecondToken.pack2HopRoute();
+                bytes32 lData = RoutesLib.pack2HopRoute(lSecondToken);
                 assembly {
                     sstore(lSlot, lData)
                 }
             } else if (lRouteLength == 4) {
-                (bytes32 lFirstWord, bytes32 lSecondWord) = lSecondToken.pack3HopRoute(lThirdToken);
+                (bytes32 lFirstWord, bytes32 lSecondWord) = RoutesLib.pack3HopRoute(lSecondToken, lThirdToken);
 
                 // Write two words to storage.
                 assembly {
@@ -546,8 +543,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function clearRoute(address aToken0, address aToken1) external onlyOwner {
-        if (aToken0 == aToken1) revert OracleErrors.SameToken();
-        if (aToken1 < aToken0) revert OracleErrors.TokensUnsorted();
+        _validateTokens(aToken0, aToken1);
 
         (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
 

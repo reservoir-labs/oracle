@@ -7,11 +7,10 @@ library OracleErrors {
     error IncorrectTokensDesignatePair();
     error InvalidRoute();
     error InvalidRouteLength();
+    error InvalidTokensProvided();
     error InvalidTwapPeriod();
     error NoDesignatedPair();
     error PriceDeviationThresholdTooHigh();
-    error SameToken();
-    error TokensUnsorted();
     error UnsupportedTokenDecimals();
 
     // query errors

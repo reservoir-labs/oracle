@@ -13,7 +13,7 @@ import {
     ReservoirPriceOracle,
     IERC20,
     IPriceOracle,
-    FlagsLib
+    RoutesLib
 } from "src/ReservoirPriceOracle.sol";
 import { Bytes32Lib } from "amm-core/libraries/Bytes32.sol";
 import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
@@ -23,7 +23,7 @@ import { StubERC4626 } from "test/mock/StubERC4626.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
-    using FlagsLib for *;
+    using RoutesLib for *;
     using Bytes32Lib for *;
     using EnumerableSetLib for EnumerableSetLib.AddressSet;
     using FixedPointMathLib for uint256;
@@ -941,7 +941,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         lRoute[1] = lToken1;
 
         // act & assert
-        vm.expectRevert(OracleErrors.SameToken.selector);
+        vm.expectRevert(OracleErrors.InvalidTokensProvided.selector);
         _oracle.setRoute(lToken0, lToken1, lRoute);
     }
 
@@ -954,7 +954,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         lRoute[1] = lToken1;
 
         // act & assert
-        vm.expectRevert(OracleErrors.TokensUnsorted.selector);
+        vm.expectRevert(OracleErrors.InvalidTokensProvided.selector);
         _oracle.setRoute(lToken0, lToken1, lRoute);
     }
 

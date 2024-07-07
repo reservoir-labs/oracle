@@ -3,18 +3,18 @@ pragma solidity ^0.8.0;
 
 import { Test, console2, stdError } from "forge-std/Test.sol";
 
-import { FlagsLib } from "src/libraries/FlagsLib.sol";
+import { RoutesLib } from "src/libraries/RoutesLib.sol";
 
-contract FlagsLibTest is Test {
-    using FlagsLib for bytes32;
-    using FlagsLib for int256;
+contract RoutesLibTest is Test {
+    using RoutesLib for bytes32;
+    using RoutesLib for int256;
 
     function testIsCompositeRoute() external pure {
         // arrange
-        bytes32 lUninitialized = FlagsLib.FLAG_UNINITIALIZED;
-        bytes32 l1HopRoute = FlagsLib.FLAG_SIMPLE_PRICE;
-        bytes32 l2HopRoute = FlagsLib.FLAG_2_HOP_ROUTE;
-        bytes32 l3HopRoute = FlagsLib.FLAG_3_HOP_ROUTE;
+        bytes32 lUninitialized = RoutesLib.FLAG_UNINITIALIZED;
+        bytes32 l1HopRoute = RoutesLib.FLAG_SIMPLE_PRICE;
+        bytes32 l2HopRoute = RoutesLib.FLAG_2_HOP_ROUTE;
+        bytes32 l3HopRoute = RoutesLib.FLAG_3_HOP_ROUTE;
 
         // act & assert
         assertTrue(l2HopRoute.isCompositeRoute());
@@ -43,7 +43,7 @@ contract FlagsLibTest is Test {
         bytes32 lResult = int256(aDiff).packSimplePrice(lPrice);
 
         // assert
-        assertEq(lResult[0], FlagsLib.FLAG_SIMPLE_PRICE);
+        assertEq(lResult[0], RoutesLib.FLAG_SIMPLE_PRICE);
         assertEq(lResult[1], bytes1(uint8(aDiff)));
         assertEq(lResult.getPrice(), lPrice);
     }
