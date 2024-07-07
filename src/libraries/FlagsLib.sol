@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
+// REVIEW: Rename `FlagsLib` -> `RoutesLib` as all operations are routes related?
 library FlagsLib {
     bytes32 public constant FLAG_UNINITIALIZED = bytes32(hex"00");
     bytes32 public constant FLAG_SIMPLE_PRICE = bytes32(hex"01");

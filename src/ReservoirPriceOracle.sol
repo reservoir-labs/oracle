@@ -346,7 +346,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         int256 lDiff = lData.getDecimalDifference();
 
-        lData = lDiff.packSimplePrice(aNewPrice);
+        lData = FlagsLib.packSimplePrice(lDiff, aNewPrice);
         assembly {
             sstore(lSlot, lData)
         }
@@ -513,7 +513,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            bytes32 lData = lDiff.packSimplePrice(0);
+            bytes32 lData = FlagsLib.packSimplePrice(lDiff, 0);
             assembly {
                 // Write data to storage.
                 sstore(lSlot, lData)
@@ -525,12 +525,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lThirdToken = aRoute[2];
 
             if (lRouteLength == 3) {
-                bytes32 lData = lSecondToken.pack2HopRoute();
+                bytes32 lData = FlagsLib.pack2HopRoute(lSecondToken);
                 assembly {
                     sstore(lSlot, lData)
                 }
             } else if (lRouteLength == 4) {
-                (bytes32 lFirstWord, bytes32 lSecondWord) = lSecondToken.pack3HopRoute(lThirdToken);
+                (bytes32 lFirstWord, bytes32 lSecondWord) = FlagsLib.pack3HopRoute(lSecondToken, lThirdToken);
 
                 // Write two words to storage.
                 assembly {
