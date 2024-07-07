@@ -271,8 +271,11 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         else if (lFirstWord.isCompositeRoute()) {
             address lSecondToken = lFirstWord.getTokenFirstWord();
 
-            // REVIEW: Is it more logical to handle `is2HopRoute` then fallback to `assert(is3HopRoute)`?
-            if (lFirstWord.is3HopRoute()) {
+            if (lFirstWord.is2HopRoute()) {
+                rRoute = new address[](3);
+                rRoute[2] = aToken1;
+            } else {
+                assert(lFirstWord.is3HopRoute());
                 bytes32 lSecondWord;
                 assembly {
                     lSecondWord := sload(add(lSlot, 1))
@@ -282,16 +285,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 rRoute = new address[](4);
                 rRoute[2] = lThirdToken;
                 rRoute[3] = aToken1;
-            } else {
-                rRoute = new address[](3);
-                rRoute[2] = aToken1;
             }
 
             rRoute[0] = aToken0;
             rRoute[1] = lSecondToken;
         }
         // no route
-        // solhint-disable-next-line no-empty-blocks
         else if (lFirstWord.isUninitialized()) {
             rRoute = new address[](0);
         }

@@ -19,6 +19,10 @@ library RoutesLib {
         return aData[0] & hex"02" > 0;
     }
 
+    function is2HopRoute(bytes32 aData) internal pure returns (bool) {
+        return aData[0] == FLAG_2_HOP_ROUTE;
+    }
+
     function is3HopRoute(bytes32 aData) internal pure returns (bool) {
         return aData[0] == FLAG_3_HOP_ROUTE;
     }
