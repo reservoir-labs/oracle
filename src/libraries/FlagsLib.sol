@@ -47,12 +47,8 @@ library FlagsLib {
         pure
         returns (bytes32 rFirstWord, bytes32 rSecondWord)
     {
-        bytes32 lThirdTokenTop10Bytes = bytes32(bytes20(aThirdToken)) >> 176;
-        // Trim away the first 10 bytes since we only want the last 10 bytes.
-        bytes32 lThirdTokenBottom10Bytes = bytes32(bytes20(aThirdToken) << 80);
-
-        rFirstWord = FLAG_3_HOP_ROUTE | bytes32(bytes20(aSecondToken)) >> 8 | lThirdTokenTop10Bytes;
-        rSecondWord = lThirdTokenBottom10Bytes;
+        rFirstWord = FLAG_3_HOP_ROUTE | bytes32(bytes20(aSecondToken)) >> 8;
+        rSecondWord = bytes20(aThirdToken);
     }
 
     function getPrice(bytes32 aData) internal pure returns (uint256 rPrice) {
@@ -64,9 +60,7 @@ library FlagsLib {
             address(uint160(uint256(aData & 0x00ffffffffffffffffffffffffffffffffffffffff0000000000000000000000) >> 88));
     }
 
-    function getThirdToken(bytes32 aFirstWord, bytes32 aSecondWord) internal pure returns (address rToken) {
-        bytes32 lTop10Bytes = (aFirstWord & 0x00000000000000000000000000000000000000000000ffffffffffffffffffff) << 80;
-        bytes32 lBottom10Bytes = aSecondWord >> 176;
-        rToken = address(uint160(uint256(lTop10Bytes | lBottom10Bytes)));
+    function getThirdToken(bytes32 aSecondWord) internal pure returns (address rToken) {
+        rToken = address(bytes20(aSecondWord));
     }
 }

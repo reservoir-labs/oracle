@@ -8,11 +8,10 @@ import { OracleErrors } from "src/libraries/OracleErrors.sol";
 import {
     IReservoirPriceOracle,
     OracleAverageQuery,
-    OracleLatestQuery,
-    OracleAccumulatorQuery
+    OracleLatestQuery
 } from "src/interfaces/IReservoirPriceOracle.sol";
 import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
-import { QueryProcessor, ReservoirPair, Buffer, PriceType } from "src/libraries/QueryProcessor.sol";
+import { QueryProcessor, ReservoirPair, PriceType } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
 import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
@@ -26,7 +25,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     using LibSort for address[];
     using FlagsLib for *;
     using QueryProcessor for ReservoirPair;
-    using Utils for *;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                       EVENTS                                              //
@@ -136,13 +134,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
     /// @param aRewardRecipient The beneficiary of the reward. Must be able to receive ether. Set to address(0) if not seeking a reward
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) public nonReentrant {
-        (address lToken0, address lToken1) = aTokenA.sortTokens(aTokenB);
+        (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
         (address[] memory lRoute,, uint256 lPrevPrice) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert OracleErrors.NoPath();
 
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
-            (lToken0, lToken1) = lRoute[i].sortTokens(lRoute[i + 1]);
+            (lToken0, lToken1) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
 
             uint256 lNewPrice = _getTimeWeightedAverageSingle(
                 OracleAverageQuery(
@@ -190,31 +188,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         return lResult;
     }
 
-    /// @inheritdoc IReservoirPriceOracle
-    function getPastAccumulators(OracleAccumulatorQuery[] memory aQueries)
-        external
-        view
-        returns (int256[] memory rResults)
-    {
-        rResults = new int256[](aQueries.length);
-
-        OracleAccumulatorQuery memory lQuery;
-        for (uint256 i = 0; i < aQueries.length; ++i) {
-            lQuery = aQueries[i];
-            ReservoirPair lPair = pairs[lQuery.base][lQuery.quote];
-            _validatePair(lPair);
-
-            (,,, uint16 lIndex) = lPair.getReserves();
-            int256 lAcc = lPair.getPastAccumulator(lQuery.priceType, lIndex, lQuery.ago);
-            rResults[i] = lAcc;
-        }
-    }
-
-    /// @inheritdoc IReservoirPriceOracle
-    function getLargestSafeQueryWindow() external pure returns (uint256) {
-        return Buffer.SIZE;
-    }
-
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                 INTERNAL FUNCTIONS                                        //
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -249,10 +222,17 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aRecipient == address(0)) return;
 
         // N.B. Revisit this whenever deployment on a new chain is needed
-        // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()` on ARB because the latter will always return
-        // the demand insensitive base fee, while the former can return real higher fees during times of congestion
-        // safety: this mul will not overflow even in extreme cases of `block.basefee`
-        uint256 lPayoutAmt = block.basefee * rewardGasAmount;
+        //
+        // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()`
+        // on ARB because the latter will always return the demand insensitive
+        // base fee, while the former can return higher fees during times of
+        // congestion
+
+        // SAFETY: this mul will not overflow even in extreme cases of `block.basefee`.
+        uint256 lPayoutAmt;
+        unchecked {
+            lPayoutAmt = block.basefee * rewardGasAmount;
+        }
 
         if (lPayoutAmt <= address(this).balance) {
             payable(aRecipient).transfer(lPayoutAmt);
@@ -269,7 +249,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice)
     {
         address[] memory lResults = new address[](Constants.MAX_ROUTE_LENGTH);
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lFirstWord;
         uint256 lRouteLength;
@@ -297,7 +277,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 assembly {
                     lSecondWord := sload(add(lSlot, 1))
                 }
-                address lThirdToken = lFirstWord.getThirdToken(lSecondWord);
+                address lThirdToken = lSecondWord.getThirdToken();
 
                 lResults[2] = lThirdToken;
                 lResults[3] = aToken1;
@@ -321,9 +301,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// route. If there isn't an existing route, we write it as well.
     /// @dev assumed that aToken0 and aToken1 are not necessarily sorted
     function _checkAndPopulateIntermediateRoute(address aToken0, address aToken1) internal {
-        (address lLowerToken, address lHigherToken) = aToken0.sortTokens(aToken1);
+        (address lLowerToken, address lHigherToken) = Utils.sortTokens(aToken0, aToken1);
 
-        bytes32 lSlot = lLowerToken.calculateSlot(lHigherToken);
+        bytes32 lSlot = Utils.calculateSlot(lLowerToken, lHigherToken);
         bytes32 lData;
         assembly {
             lData := sload(lSlot)
@@ -342,7 +322,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         view
         returns (uint256 rPrice, int256 rDecimalDiff)
     {
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lData;
         assembly {
@@ -357,7 +337,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function _writePriceCache(address aToken0, address aToken1, uint256 aNewPrice) internal {
         if (aNewPrice == 0 || aNewPrice > Constants.MAX_SUPPORTED_PRICE) revert OracleErrors.PriceOutOfRange(aNewPrice);
 
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
         bytes32 lData;
         assembly {
             lData := sload(lSlot)
@@ -380,7 +360,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aBase == aQuote) return (aAmount, aAmount);
         if (aAmount > Constants.MAX_AMOUNT_IN) revert OracleErrors.AmountInTooLarge();
 
-        (address lToken0, address lToken1) = aBase.sortTokens(aQuote);
+        (address lToken0, address lToken1) = Utils.sortTokens(aBase, aQuote);
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
@@ -410,7 +390,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             assert(lRoute[0] == aBase);
 
             for (uint256 i = 0; i < lRoute.length - 1; ++i) {
-                (address lLowerToken, address lHigherToken) = lRoute[i].sortTokens(lRoute[i + 1]);
+                (address lLowerToken, address lHigherToken) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
                 // it is assumed that intermediate routes defined here are simple routes and not composite routes
                 (lPrice, lDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
 
@@ -495,7 +475,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @notice Sets the pair to serve as price feed for a given route.
     function designatePair(address aTokenA, address aTokenB, ReservoirPair aPair) external onlyOwner {
-        (aTokenA, aTokenB) = aTokenA.sortTokens(aTokenB);
+        (aTokenA, aTokenB) = Utils.sortTokens(aTokenA, aTokenB);
         if (aTokenA != address(aPair.token0()) || aTokenB != address(aPair.token1())) {
             revert OracleErrors.IncorrectTokensDesignatePair();
         }
@@ -505,7 +485,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function undesignatePair(address aToken0, address aToken1) external onlyOwner {
-        (aToken0, aToken1) = aToken0.sortTokens(aToken1);
+        (aToken0, aToken1) = Utils.sortTokens(aToken0, aToken1);
 
         delete pairs[aToken0][aToken1];
         emit DesignatePair(aToken0, aToken1, ReservoirPair(address(0)));
@@ -523,7 +503,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (lRouteLength > Constants.MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
         if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
 
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         // simple route
         if (lRouteLength == 2) {
@@ -571,7 +551,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
 
-        bytes32 lSlot = aToken0.calculateSlot(aToken1);
+        bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         // clear the storage slot that the route has written to previously
         assembly {

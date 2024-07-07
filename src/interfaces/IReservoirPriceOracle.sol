@@ -14,7 +14,7 @@
 
 pragma solidity ^0.8.0;
 
-import { OracleAverageQuery, OracleLatestQuery, OracleAccumulatorQuery } from "src/Structs.sol";
+import { OracleAverageQuery, OracleLatestQuery } from "src/Structs.sol";
 
 /**
  * @dev Interface for querying historical data from a Pool that can be used as a Price Oracle.
@@ -40,24 +40,4 @@ interface IReservoirPriceOracle {
      * @dev Returns latest sample of `priceType`. Prices are represented as 18 decimal fixed point values.
      */
     function getLatest(OracleLatestQuery calldata priceType) external view returns (uint256);
-
-    /**
-     * @dev Returns largest time window that can be safely queried, where 'safely' means the Oracle is guaranteed to be
-     * able to produce a result and not revert.
-     *
-     * If a query has a non-zero `ago` value, then `secs + ago` (the oldest point in time) must be smaller than this
-     * value for 'safe' queries.
-     *
-     * Since ReservoirPair's oracle writes every second, the largest safe query window is the number of seconds
-     * same as the size of the buffer.
-     */
-    function getLargestSafeQueryWindow() external view returns (uint256);
-
-    /**
-     * @dev Returns the accumulators corresponding to each of `queries`.
-     */
-    function getPastAccumulators(OracleAccumulatorQuery[] memory queries)
-        external
-        view
-        returns (int256[] memory results);
 }
