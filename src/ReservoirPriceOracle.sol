@@ -192,8 +192,14 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     //                                 INTERNAL FUNCTIONS                                        //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    function _validatePair(ReservoirPair aPair) internal pure {
+    function _validatePair(ReservoirPair aPair) private pure {
         if (address(aPair) == address(0)) revert OracleErrors.NoDesignatedPair();
+    }
+
+    function _validateTokens(address aToken0, address aToken1) private pure {
+        // REVIEW: Can be collapsed into `if (aToken1 <= aToken1) revert`.
+        if (aToken0 == aToken1) revert OracleErrors.SameToken();
+        if (aToken1 < aToken0) revert OracleErrors.TokensUnsorted();
     }
 
     function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) internal view returns (uint256 rResult) {
@@ -498,8 +504,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     function setRoute(address aToken0, address aToken1, address[] memory aRoute) public onlyOwner {
         uint256 lRouteLength = aRoute.length;
 
-        if (aToken0 == aToken1) revert OracleErrors.SameToken();
-        if (aToken1 < aToken0) revert OracleErrors.TokensUnsorted();
+        _validateTokens(aToken0, aToken1);
         if (lRouteLength > Constants.MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
         if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
 
@@ -546,8 +551,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function clearRoute(address aToken0, address aToken1) external onlyOwner {
-        if (aToken0 == aToken1) revert OracleErrors.SameToken();
-        if (aToken1 < aToken0) revert OracleErrors.TokensUnsorted();
+        _validateTokens(aToken0, aToken1);
 
         (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
 
