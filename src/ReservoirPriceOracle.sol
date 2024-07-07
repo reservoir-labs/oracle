@@ -113,6 +113,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         (rRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
     }
 
+    // REVIEW: Is this intended primarily for debugging? Because this won't work on composite routes right?
     /// @notice The latest cached geometric TWAP of token0/token1.
     /// Stored in the form of a 18 decimal fixed point number.
     /// Supported price range: 1wei to `Constants.MAX_SUPPORTED_PRICE`.
@@ -153,7 +154,9 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             );
 
             // if it's a simple route, we avoid loading the price again from storage
-            if (lRoute.length != 2) (lPrevPrice,) = _priceCache(lToken0, lToken1);
+            if (lRoute.length != 2) {
+                (lPrevPrice,) = _priceCache(lToken0, lToken1);
+            }
 
             _writePriceCache(lToken0, lToken1, lNewPrice);
 
@@ -239,6 +242,8 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
 
         if (lPayoutAmt <= address(this).balance) {
+            // REVIEW: This can still revert, rather than balance checking we
+            // could just try/catch or use Yul to ignore reverts?
             payable(aRecipient).transfer(lPayoutAmt);
         }
         // do nothing if lPayoutAmt is greater than the balance
