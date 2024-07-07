@@ -18,12 +18,12 @@ import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGu
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
 import { LibSort } from "lib/solady/src/utils/LibSort.sol";
 import { Constants } from "src/libraries/Constants.sol";
-import { FlagsLib } from "src/libraries/FlagsLib.sol";
+import { RoutesLib } from "src/libraries/RoutesLib.sol";
 
 contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using FixedPointMathLib for uint256;
     using LibSort for address[];
-    using FlagsLib for *;
+    using RoutesLib for bytes32;
     using QueryProcessor for ReservoirPair;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -197,9 +197,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function _validateTokens(address aToken0, address aToken1) private pure {
-        // REVIEW: Can be collapsed into `if (aToken1 <= aToken1) revert`.
-        if (aToken0 == aToken1) revert OracleErrors.SameToken();
-        if (aToken1 < aToken0) revert OracleErrors.TokensUnsorted();
+        if (aToken1 <= aToken0) revert OracleErrors.InvalidTokensProvided();
     }
 
     function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) internal view returns (uint256 rResult) {
@@ -347,7 +345,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         int256 lDiff = lData.getDecimalDifference();
 
-        lData = FlagsLib.packSimplePrice(lDiff, aNewPrice);
+        lData = RoutesLib.packSimplePrice(lDiff, aNewPrice);
         assembly {
             sstore(lSlot, lData)
         }
@@ -513,7 +511,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            bytes32 lData = FlagsLib.packSimplePrice(lDiff, 0);
+            bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0);
             assembly {
                 // Write data to storage.
                 sstore(lSlot, lData)
@@ -525,12 +523,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             address lThirdToken = aRoute[2];
 
             if (lRouteLength == 3) {
-                bytes32 lData = FlagsLib.pack2HopRoute(lSecondToken);
+                bytes32 lData = RoutesLib.pack2HopRoute(lSecondToken);
                 assembly {
                     sstore(lSlot, lData)
                 }
             } else if (lRouteLength == 4) {
-                (bytes32 lFirstWord, bytes32 lSecondWord) = FlagsLib.pack3HopRoute(lSecondToken, lThirdToken);
+                (bytes32 lFirstWord, bytes32 lSecondWord) = RoutesLib.pack3HopRoute(lSecondToken, lThirdToken);
 
                 // Write two words to storage.
                 assembly {
