@@ -384,7 +384,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             assert(lRoute[0] == aBase);
 
             for (uint256 i = 0; i < lRoute.length - 1; ++i) {
-                (address lToken0, address lToken1) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
+                (lToken0, lToken1) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
                 // it is assumed that intermediate routes defined here are simple routes and not composite routes
                 (lPrice, lDecimalDiff) = _priceCache(lToken0, lToken1);
 
