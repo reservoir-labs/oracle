@@ -185,7 +185,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
-    //                                 INTERNAL FUNCTIONS                                        //
+    //                                 PRIVATE FUNCTIONS                                         //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     function _validatePair(ReservoirPair aPair) private pure {
