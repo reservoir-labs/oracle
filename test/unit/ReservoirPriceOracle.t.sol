@@ -101,25 +101,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(lQueriedPrice, lPrice);
     }
 
-    function testGasBountyAvailable(uint256 aBountyAmount) external {
-        // assume
-        uint256 lBounty = bound(aBountyAmount, 1, type(uint256).max);
-
-        // arrange
-        deal(address(_oracle), lBounty);
-
-        // act & assert
-        assertEq(_oracle.gasBountyAvailable(), lBounty);
-    }
-
-    function testGasBountyAvailable_Zero() external view {
-        // sanity
-        assertEq(address(_oracle).balance, 0);
-
-        // act & assert
-        assertEq(_oracle.gasBountyAvailable(), 0);
-    }
-
     function testGetQuote(uint256 aPrice, uint256 aAmountIn) public {
         // assume
         uint256 lPrice = bound(aPrice, 1, 1e36);
