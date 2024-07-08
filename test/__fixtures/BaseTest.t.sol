@@ -11,7 +11,7 @@ import { Constants } from "amm-core/Constants.sol";
 import { FactoryStoreLib } from "amm-core/libraries/FactoryStore.sol";
 import { MintableERC20 } from "lib/amm-core/test/__fixtures/MintableERC20.sol";
 
-import { ReservoirPriceOracle, IReservoirPriceOracle, PriceType, IPriceOracle } from "src/ReservoirPriceOracle.sol";
+import { ReservoirPriceOracle, PriceType, IPriceOracle } from "src/ReservoirPriceOracle.sol";
 
 contract BaseTest is Test {
     using FactoryStoreLib for GenericFactory;

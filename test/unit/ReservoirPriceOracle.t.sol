@@ -8,7 +8,6 @@ import {
     FixedPointMathLib,
     PriceType,
     OracleErrors,
-    OracleLatestQuery,
     OracleAverageQuery,
     ReservoirPriceOracle,
     IERC20,
@@ -99,25 +98,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         // assert
         (uint256 lQueriedPrice,) = _oracle.priceCache(address(_tokenB), address(_tokenC));
         assertEq(lQueriedPrice, lPrice);
-    }
-
-    function testGasBountyAvailable(uint256 aBountyAmount) external {
-        // assume
-        uint256 lBounty = bound(aBountyAmount, 1, type(uint256).max);
-
-        // arrange
-        deal(address(_oracle), lBounty);
-
-        // act & assert
-        assertEq(_oracle.gasBountyAvailable(), lBounty);
-    }
-
-    function testGasBountyAvailable_Zero() external view {
-        // sanity
-        assertEq(address(_oracle).balance, 0);
-
-        // act & assert
-        assertEq(_oracle.gasBountyAvailable(), 0);
     }
 
     function testGetQuote(uint256 aPrice, uint256 aAmountIn) public {
@@ -772,40 +752,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(lData, 0);
     }
 
-    function testGetTimeWeightedAverage() external {
-        // arrange
-        skip(60);
-        _pair.sync();
-        skip(60);
-        _pair.sync();
-        _oracle.designatePair(address(_tokenA), address(_tokenB), _pair);
-        OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
-        lQueries[0] = OracleAverageQuery(PriceType.RAW_PRICE, address(_tokenA), address(_tokenB), 10, 0);
-
-        // act
-        uint256[] memory lResults = _oracle.getTimeWeightedAverage(lQueries);
-
-        // assert
-        assertEq(lResults[0], 98_918_868_099_219_913_512);
-    }
-
-    function testGetLatest(uint32 aFastForward) public {
-        // assume - latest price should always be the same no matter how much time has elapsed
-        uint32 lFastForward = uint32(bound(aFastForward, 1, 2 ** 31 - 2));
-
-        // arrange
-        skip(lFastForward);
-        _pair.sync();
-        _oracle.designatePair(address(_tokenA), address(_tokenB), _pair);
-
-        // act
-        uint256 lLatestPrice =
-            _oracle.getLatest(OracleLatestQuery(PriceType.RAW_PRICE, address(_tokenA), address(_tokenB)));
-
-        // assert
-        assertEq(lLatestPrice, 98_918_868_099_219_913_512);
-    }
-
     function testDesignatePair() external {
         // act
         vm.expectEmit(false, false, false, true);
@@ -841,30 +787,6 @@ contract ReservoirPriceOracleTest is BaseTest {
     ///////////////////////////////////////////////////////////////////////////////////////////////
     //                                 ERROR CONDITIONS                                          //
     ///////////////////////////////////////////////////////////////////////////////////////////////
-
-    function testGetLatest_Inverted() external {
-        // arrange
-        testGetLatest(5);
-
-        // act & assert
-        vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
-        _oracle.getLatest(OracleLatestQuery(PriceType.RAW_PRICE, address(_tokenB), address(_tokenA)));
-    }
-
-    function testGetTimeWeightedAverage_Inverted() external {
-        // arrange
-        skip(60);
-        _pair.sync();
-        skip(60);
-        _pair.sync();
-        _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
-        OracleAverageQuery[] memory lQueries = new OracleAverageQuery[](1);
-        lQueries[0] = OracleAverageQuery(PriceType.RAW_PRICE, address(_tokenB), address(_tokenA), 10, 0);
-
-        // act & assert
-        vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
-        _oracle.getTimeWeightedAverage(lQueries);
-    }
 
     function testSetFallbackOracle_NotOwner() external {
         vm.prank(address(123));
