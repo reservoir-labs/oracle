@@ -5,7 +5,7 @@ import { IERC20 } from "forge-std/interfaces/IERC20.sol";
 import { IERC4626 } from "forge-std/interfaces/IERC4626.sol";
 
 import { OracleErrors } from "src/libraries/OracleErrors.sol";
-import { IReservoirPriceOracle, OracleAverageQuery, OracleLatestQuery } from "src/interfaces/IReservoirPriceOracle.sol";
+import { OracleAverageQuery } from "src/Structs.sol";
 import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
 import { QueryProcessor, ReservoirPair, PriceType } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
@@ -16,7 +16,7 @@ import { LibSort } from "lib/solady/src/utils/LibSort.sol";
 import { Constants } from "src/libraries/Constants.sol";
 import { RoutesLib } from "src/libraries/RoutesLib.sol";
 
-contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.sender), ReentrancyGuard {
+contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuard {
     using FixedPointMathLib for uint256;
     using LibSort for address[];
     using RoutesLib for bytes32;
@@ -156,32 +156,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
                 _rewardUpdater(aRewardRecipient);
             }
         }
-    }
-
-    // IReservoirPriceOracle
-
-    // REVIEW: This let's anyone read the Reservoir oracle without paying right?
-    /// @inheritdoc IReservoirPriceOracle
-    function getTimeWeightedAverage(OracleAverageQuery[] memory aQueries)
-        external
-        view
-        returns (uint256[] memory rResults)
-    {
-        rResults = new uint256[](aQueries.length);
-        for (uint256 i = 0; i < aQueries.length; ++i) {
-            rResults[i] = _getTimeWeightedAverageSingle(aQueries[i]);
-        }
-    }
-
-    // REVIEW: What value is there in this?
-    /// @inheritdoc IReservoirPriceOracle
-    function getLatest(OracleLatestQuery calldata aQuery) external view returns (uint256) {
-        ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
-        _validatePair(lPair);
-
-        (,,, uint256 lIndex) = lPair.getReserves();
-        uint256 lResult = lPair.getInstantValue(aQuery.priceType, lIndex);
-        return lResult;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
