@@ -239,7 +239,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
         // does not revert under any circumstance
         assembly ("memory-safe") {
-            let result := call(gas(), aRecipient, lPayoutAmt, codesize(), 0x00, codesize(), 0x00)
+            pop(call(gas(), aRecipient, lPayoutAmt, codesize(), 0x00, codesize(), 0x00))
         }
     }
 
