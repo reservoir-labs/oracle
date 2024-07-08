@@ -51,13 +51,13 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// 1e18 == 100%
     uint64 public priceDeviationThreshold;
 
-    /// @notice This number is multiplied by the base fee to determine the reward for keepers
+    /// @notice This number is multiplied by the base fee to determine the reward for keepers.
     uint64 public rewardGasAmount;
 
-    /// @notice TWAP period (in seconds) for querying the oracle
+    /// @notice TWAP period (in seconds) for querying the oracle.
     uint64 public twapPeriod;
 
-    /// @notice Designated pairs to serve as price feed for a certain token0 and token1
+    /// @notice Designated pairs to serve as price feed for a certain token0 and token1.
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,6 +101,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     // price update related functions
 
+    // REVIEW: While this is nice in terms of self documentation, I think any MEV bot can just do `address(reservoirOracle).balance` right?
     function gasBountyAvailable() external view returns (uint256) {
         return address(this).balance;
     }
@@ -198,7 +199,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         if (aToken1 <= aToken0) revert OracleErrors.InvalidTokensProvided();
     }
 
-    function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) internal view returns (uint256 rResult) {
+    function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) private view returns (uint256 rResult) {
         ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
         _validatePair(lPair);
 
@@ -206,7 +207,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         rResult = lPair.getTimeWeightedAverage(aQuery.priceType, aQuery.secs, aQuery.ago, lIndex);
     }
 
-    function _calcPercentageDiff(uint256 aOriginal, uint256 aNew) internal pure returns (uint256) {
+    function _calcPercentageDiff(uint256 aOriginal, uint256 aNew) private pure returns (uint256) {
         unchecked {
             if (aOriginal == 0) return 0;
 
@@ -220,7 +221,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _rewardUpdater(address aRecipient) internal {
+    function _rewardUpdater(address aRecipient) private {
         if (aRecipient == address(0)) return;
 
         // N.B. Revisit this whenever deployment on a new chain is needed
@@ -246,7 +247,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise
     /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise
     function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
-        internal
+        private
         view
         returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice)
     {
@@ -314,7 +315,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     // performs an SLOAD to load 1 word which contains the simple price and decimal difference
     function _priceCache(address aToken0, address aToken1)
-        internal
+        private
         view
         returns (uint256 rPrice, int256 rDecimalDiff)
     {
@@ -330,7 +331,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
-    function _writePriceCache(address aToken0, address aToken1, uint256 aNewPrice) internal {
+    function _writePriceCache(address aToken0, address aToken1, uint256 aNewPrice) private {
         if (aNewPrice == 0 || aNewPrice > Constants.MAX_SUPPORTED_PRICE) revert OracleErrors.PriceOutOfRange(aNewPrice);
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
@@ -349,7 +350,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function _getQuotes(uint256 aAmount, address aBase, address aQuote, bool aIsGetQuotes)
-        internal
+        private
         view
         returns (uint256 rBidOut, uint256 rAskOut)
     {
@@ -386,12 +387,12 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
             assert(lRoute[0] == aBase);
 
             for (uint256 i = 0; i < lRoute.length - 1; ++i) {
-                (address lLowerToken, address lHigherToken) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
+                (address lToken0, address lToken1) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
                 // it is assumed that intermediate routes defined here are simple routes and not composite routes
-                (lPrice, lDecimalDiff) = _priceCache(lLowerToken, lHigherToken);
+                (lPrice, lDecimalDiff) = _priceCache(lToken0, lToken1);
 
                 if (lPrice == 0) revert OracleErrors.PriceZero();
-                lIntermediateAmount = _calcAmtOut(lIntermediateAmount, lPrice, lDecimalDiff, lRoute[i] != lLowerToken);
+                lIntermediateAmount = _calcAmtOut(lIntermediateAmount, lPrice, lDecimalDiff, lRoute[i] != lToken0);
             }
             rBidOut = rAskOut = lIntermediateAmount;
         }
@@ -399,7 +400,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     /// @dev aPrice assumed to be > 0, as checked by _getQuote
     function _calcAmtOut(uint256 aAmountIn, uint256 aPrice, int256 aDecimalDiff, bool aInverse)
-        internal
+        private
         pure
         returns (uint256 rOut)
     {
@@ -427,7 +428,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     }
 
     function _useFallbackOracle(uint256 aAmount, address aBase, address aQuote, bool aIsGetQuotes)
-        internal
+        private
         view
         returns (uint256 rBidOut, uint256 rAskOut)
     {
