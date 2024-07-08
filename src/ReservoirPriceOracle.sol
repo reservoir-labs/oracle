@@ -130,7 +130,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
     /// @param aTokenA Address of one of the tokens for the price update. Does not have to be less than address of aTokenB
     /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
     /// @param aRewardRecipient The beneficiary of the reward. Must be able to receive ether. Set to address(0) if not seeking a reward
-    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) public nonReentrant {
+    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
         (address[] memory lRoute,, uint256 lPrevPrice) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
@@ -165,9 +165,10 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     // IReservoirPriceOracle
 
+    // REVIEW: This let's anyone read the Reservoir oracle without paying right?
     /// @inheritdoc IReservoirPriceOracle
     function getTimeWeightedAverage(OracleAverageQuery[] memory aQueries)
-        public
+        external
         view
         returns (uint256[] memory rResults)
     {
@@ -177,6 +178,7 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
         }
     }
 
+    // REVIEW: What value is there in this?
     /// @inheritdoc IReservoirPriceOracle
     function getLatest(OracleLatestQuery calldata aQuery) external view returns (uint256) {
         ReservoirPair lPair = pairs[aQuery.base][aQuery.quote];
