@@ -101,11 +101,6 @@ contract ReservoirPriceOracle is IPriceOracle, IReservoirPriceOracle, Owned(msg.
 
     // price update related functions
 
-    // REVIEW: While this is nice in terms of self documentation, I think any MEV bot can just do `address(reservoirOracle).balance` right?
-    function gasBountyAvailable() external view returns (uint256) {
-        return address(this).balance;
-    }
-
     function route(address aToken0, address aToken1) external view returns (address[] memory rRoute) {
         (rRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
     }
