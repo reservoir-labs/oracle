@@ -102,7 +102,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     // price update related functions
 
     function route(address aToken0, address aToken1) external view returns (address[] memory rRoute) {
-        (rRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
+        (rRoute,,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
     }
 
     /// @notice The latest cached geometric TWAP of token0/token1.
@@ -128,7 +128,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
-        (address[] memory lRoute,, uint256 lPrevPrice) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
+        (address[] memory lRoute,, uint256 lPrevPrice,) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert OracleErrors.NoPath();
 
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
@@ -217,10 +217,11 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @return rRoute The route to determine the price between aToken0 and aToken1
     /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise
     /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise
+    /// @return rBpDiffForMaxReward The price difference at and beyond which the maximum amount of gas bounty is applicable.
     function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
         private
         view
-        returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice)
+        returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice, uint256 rBpDiffForMaxReward)
     {
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
@@ -236,6 +237,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             rRoute[1] = aToken1;
             rDecimalDiff = lFirstWord.getDecimalDifference();
             rPrice = lFirstWord.getPrice();
+            rBpDiffForMaxReward = lFirstWord.getBpDiffForMaxReward();
         }
         // composite route
         else if (lFirstWord.isCompositeRoute()) {
@@ -329,7 +331,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         if (aAmount > Constants.MAX_AMOUNT_IN) revert OracleErrors.AmountInTooLarge();
 
         (address lToken0, address lToken1) = Utils.sortTokens(aBase, aQuote);
-        (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice) =
+        (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice,) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
         if (lRoute.length == 0) {
@@ -515,7 +517,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     function clearRoute(address aToken0, address aToken1) external onlyOwner {
         _validateTokens(aToken0, aToken1);
 
-        (address[] memory lRoute,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
+        (address[] memory lRoute,,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 

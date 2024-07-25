@@ -27,13 +27,6 @@ library RoutesLib {
         return aData[0] == FLAG_3_HOP_ROUTE;
     }
 
-    // Positive value indicates that token1 has a greater number of decimals compared to token2
-    // while a negative value indicates otherwise.
-    // range of values between -18 and 18
-    function getDecimalDifference(bytes32 aData) internal pure returns (int256 rDiff) {
-        rDiff = int8(uint8(aData[1]));
-    }
-
     // Assumes that aDecimalDifference is between -18 and 18
     // Assumes that aPrice is between 1 and 1e36
     function packSimplePrice(int256 aDecimalDifference, uint256 aPrice) internal pure returns (bytes32 rPacked) {
@@ -55,8 +48,19 @@ library RoutesLib {
         rSecondWord = bytes20(aThirdToken);
     }
 
+    // Positive value indicates that token1 has a greater number of decimals compared to token2
+    // while a negative value indicates otherwise.
+    // range of values between -18 and 18
+    function getDecimalDifference(bytes32 aData) internal pure returns (int256 rDiff) {
+        rDiff = int8(uint8(aData[1]));
+    }
+
     function getPrice(bytes32 aData) internal pure returns (uint256 rPrice) {
-        rPrice = uint256(aData & 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
+        rPrice = uint256(aData & 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
+    }
+
+    function getBpDiffForMaxReward(bytes32 aData) internal pure returns (uint256 rBpDiffForMaxReward) {
+        rBpDiffForMaxReward = uint256((aData & 0x0000ffff00000000000000000000000000000000000000000000000000000000) >> 224);
     }
 
     function getTokenFirstWord(bytes32 aData) internal pure returns (address rToken) {
