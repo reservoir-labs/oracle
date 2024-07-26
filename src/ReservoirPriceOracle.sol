@@ -26,9 +26,9 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     //                                       EVENTS                                              //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
+    event BpDiffForMaxReward(address token0, address token1, uint16 bpForMaxReward);
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event FallbackOracleSet(address fallbackOracle);
-    event PriceDeviationThreshold(uint256 newThreshold);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
     event TwapPeriod(uint256 newPeriod);
@@ -44,12 +44,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @dev If `address(0)` then there is no fallback.
     address public fallbackOracle;
 
-    // The following 3 storage variables take up 1 storage slot.
-
-    /// @notice percentage change greater than which, a price update may result in a reward payout of native tokens,
-    /// subject to availability of rewards.
-    /// 1e18 == 100%
-    uint64 public priceDeviationThreshold;
+    // The following 2 storage variables take up 1 storage slot.
 
     /// @notice This number is multiplied by the base fee to determine the reward for keepers.
     uint64 public rewardGasAmount;
@@ -64,8 +59,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     //                                CONSTRUCTOR, FALLBACKS                                     //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    constructor(uint64 aThreshold, uint64 aTwapPeriod, uint64 aMultiplier, PriceType aType) {
-        updatePriceDeviationThreshold(aThreshold);
+    constructor(uint64 aTwapPeriod, uint64 aMultiplier, PriceType aType) {
         updateTwapPeriod(aTwapPeriod);
         updateRewardGasAmount(aMultiplier);
         PRICE_TYPE = aType;
@@ -128,7 +122,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
-        (address[] memory lRoute,, uint256 lPrevPrice,) = _getRouteDecimalDifferencePrice(lToken0, lToken1);
+        (address[] memory lRoute,, uint256 lPrevPrice, uint256 lBpDiffForMaxReward) =
+            _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert OracleErrors.NoPath();
 
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
@@ -150,11 +145,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             }
 
             _writePriceCache(lToken0, lToken1, lNewPrice);
-
-            // determine if price has moved beyond the threshold, and pay out reward if so
-            if (_calcPercentageDiff(lPrevPrice, lNewPrice) >= priceDeviationThreshold) {
-                _rewardUpdater(aRewardRecipient);
-            }
+            _rewardUpdater(lPrevPrice, lNewPrice, aRewardRecipient, lBpDiffForMaxReward);
         }
     }
 
@@ -192,8 +183,16 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         }
     }
 
-    function _rewardUpdater(address aRecipient) private {
+    function _rewardUpdater(uint256 aPrevPrice, uint256 aNewPrice, address aRecipient, uint256 aBpDiffForMaxReward)
+        private
+    {
+        uint256 lPercentDiff = _calcPercentageDiff(aPrevPrice, aNewPrice);
+        if (lPercentDiff == 0) return;
         if (aRecipient == address(0)) return;
+
+        // can be unchecked
+        uint256 lBpForMaxRewardWAD = aBpDiffForMaxReward * Constants.WAD / Constants.BP_SCALE;
+        uint256 lReward = lPercentDiff > lBpForMaxRewardWAD ? lBpForMaxRewardWAD : lPercentDiff;
 
         // N.B. Revisit this whenever deployment on a new chain is needed
         //
@@ -205,7 +204,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         // SAFETY: this mul will not overflow even in extreme cases of `block.basefee`.
         uint256 lPayoutAmt;
         unchecked {
-            lPayoutAmt = block.basefee * rewardGasAmount;
+            lPayoutAmt = block.basefee * rewardGasAmount * lReward / lBpForMaxRewardWAD;
         }
 
         // does not revert under any circumstance
@@ -270,7 +269,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     /// Calculate the storage slot for this intermediate segment and read it to see if there is an existing
     /// route. If there isn't an existing route, we write it as well.
-    function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB) private {
+    function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB, uint16 aBpMaxReward) private {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
         bytes32 lSlot = Utils.calculateSlot(lToken0, lToken1);
@@ -282,16 +281,14 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             address[] memory lIntermediateRoute = new address[](2);
             lIntermediateRoute[0] = lToken0;
             lIntermediateRoute[1] = lToken1;
-            setRoute(lToken0, lToken1, lIntermediateRoute);
+            uint16[] memory asd = new uint16[](1);
+            asd[0] = aBpMaxReward;
+            setRoute(lToken0, lToken1, lIntermediateRoute, asd);
         }
     }
 
     // performs an SLOAD to load 1 word which contains the simple price and decimal difference
-    function _priceCache(address aToken0, address aToken1)
-        private
-        view
-        returns (uint256 rPrice, int256 rDecimalDiff)
-    {
+    function _priceCache(address aToken0, address aToken1) private view returns (uint256 rPrice, int256 rDecimalDiff) {
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lData;
@@ -314,9 +311,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         }
         if (!lData.isSimplePrice()) revert OracleErrors.WriteToNonSimpleRoute();
 
-        int256 lDiff = lData.getDecimalDifference();
-
-        lData = RoutesLib.packSimplePrice(lDiff, aNewPrice);
+        lData = RoutesLib.packSimplePrice(lData.getDecimalDifference(), aNewPrice, lData.getBpDiffForMaxReward());
         assembly ("memory-safe") {
             sstore(lSlot, lData)
         }
@@ -421,15 +416,6 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         emit FallbackOracleSet(aFallbackOracle);
     }
 
-    function updatePriceDeviationThreshold(uint64 aNewThreshold) public onlyOwner {
-        if (aNewThreshold > Constants.MAX_DEVIATION_THRESHOLD) {
-            revert OracleErrors.PriceDeviationThresholdTooHigh();
-        }
-
-        priceDeviationThreshold = aNewThreshold;
-        emit PriceDeviationThreshold(aNewThreshold);
-    }
-
     function updateTwapPeriod(uint64 aNewPeriod) public onlyOwner {
         if (aNewPeriod == 0 || aNewPeriod > Constants.MAX_TWAP_PERIOD) {
             revert OracleErrors.InvalidTwapPeriod();
@@ -461,16 +447,21 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         emit DesignatePair(aToken0, aToken1, ReservoirPair(address(0)));
     }
 
-    /// @notice Sets the price route between aToken0 and aToken1, and also intermediate routes if previously undefined
-    /// @param aToken0 Address of the lower token
-    /// @param aToken1 Address of the higher token
-    /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived
-    function setRoute(address aToken0, address aToken1, address[] memory aRoute) public onlyOwner {
+    /// @notice Sets the price route between aToken0 and aToken1, and also intermediate routes if previously undefined.
+    /// @param aToken0 Address of the lower token.
+    /// @param aToken1 Address of the higher token.
+    /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived.
+    /// @param aBpDiffForMaxReward Array of basis points at and beyond which the bounty payout for a price update is maximum.
+    function setRoute(address aToken0, address aToken1, address[] memory aRoute, uint16[] memory aBpDiffForMaxReward)
+        public
+        onlyOwner
+    {
         uint256 lRouteLength = aRoute.length;
 
         _validateTokens(aToken0, aToken1);
         if (lRouteLength > Constants.MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
         if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
+        if (aBpDiffForMaxReward.length != lRouteLength - 1) revert OracleErrors.InvalidArrayLengthBpForMaxReward();
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
@@ -482,11 +473,15 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0);
+            if (aBpDiffForMaxReward[0] > Constants.BP_SCALE) revert OracleErrors.InvalidBpForMaxReward();
+
+            bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, aBpDiffForMaxReward[0]);
             assembly ("memory-safe") {
                 // Write data to storage.
                 sstore(lSlot, lData)
             }
+
+            emit BpDiffForMaxReward(aToken0, aToken1, aBpDiffForMaxReward[0]);
         }
         // composite route
         else {
@@ -506,10 +501,10 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
                     sstore(lSlot, lFirstWord)
                     sstore(add(lSlot, 1), lSecondWord)
                 }
-                _checkAndPopulateIntermediateRoute(lThirdToken, aToken1);
+                _checkAndPopulateIntermediateRoute(lThirdToken, aToken1, aBpDiffForMaxReward[2]);
             }
-            _checkAndPopulateIntermediateRoute(aToken0, lSecondToken);
-            _checkAndPopulateIntermediateRoute(lSecondToken, lThirdToken);
+            _checkAndPopulateIntermediateRoute(aToken0, lSecondToken, aBpDiffForMaxReward[0]);
+            _checkAndPopulateIntermediateRoute(lSecondToken, lThirdToken, aBpDiffForMaxReward[1]);
         }
         emit Route(aToken0, aToken1, aRoute);
     }
