@@ -52,7 +52,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         require(lAccesses.length == 1, "incorrect number of accesses");
 
         int256 lDecimalDiff = int256(uint256(IERC20(aToken1).decimals())) - int256(uint256(IERC20(aToken0).decimals()));
-        bytes32 lData = lDecimalDiff.packSimplePrice(aPrice);
+        uint16 lBpDiffMaxReward = Constants.BP_SCALE;
+        bytes32 lData = lDecimalDiff.packSimplePrice(aPrice, lBpDiffMaxReward);
         require(lData.getDecimalDifference() == lDecimalDiff, "decimal diff incorrect");
         require(lData.isSimplePrice(), "flag incorrect");
         vm.store(address(_oracle), lAccesses[0], lData);
@@ -81,11 +82,12 @@ contract ReservoirPriceOracleTest is BaseTest {
     function setUp() external {
         // define route
         address[] memory lRoute = new address[](2);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](1);
         lRoute[0] = address(_tokenA);
         lRoute[1] = address(_tokenB);
 
         _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
-        _oracle.setRoute(address(_tokenA), address(_tokenB), lRoute);
+        _oracle.setRoute(address(_tokenA), address(_tokenB), lRoute, lBpDiffForMaxReward);
     }
 
     function testWritePriceCache(uint256 aPrice) external {
@@ -144,11 +146,14 @@ contract ReservoirPriceOracleTest is BaseTest {
         _writePriceCache(address(_tokenC), address(_tokenD), lPriceCD);
 
         address[] memory lRoute = new address[](4);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](3);
+        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = lBpDiffForMaxReward[2] = Constants.BP_SCALE;
+
         lRoute[0] = address(_tokenA);
         lRoute[1] = address(_tokenB);
         lRoute[2] = address(_tokenC);
         lRoute[3] = address(_tokenD);
-        _oracle.setRoute(address(_tokenA), address(_tokenD), lRoute);
+        _oracle.setRoute(address(_tokenA), address(_tokenD), lRoute, lBpDiffForMaxReward);
 
         uint256 lAmountIn = 789e6;
 
@@ -171,11 +176,13 @@ contract ReservoirPriceOracleTest is BaseTest {
         _writePriceCache(address(_tokenC), address(_tokenD), lPriceCD);
 
         address[] memory lRoute = new address[](4);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](3);
+        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = lBpDiffForMaxReward[2] = Constants.BP_SCALE;
         lRoute[0] = address(_tokenA);
         lRoute[1] = address(_tokenB);
         lRoute[2] = address(_tokenC);
         lRoute[3] = address(_tokenD);
-        _oracle.setRoute(address(_tokenA), address(_tokenD), lRoute);
+        _oracle.setRoute(address(_tokenA), address(_tokenD), lRoute, lBpDiffForMaxReward);
 
         uint256 lAmountIn = 789e6;
 
@@ -211,9 +218,13 @@ contract ReservoirPriceOracleTest is BaseTest {
         lRoute[1] = address(lTokenB);
         lRoute[2] = address(lTokenC);
 
-        _oracle.setRoute(address(lTokenA), address(lTokenC), lRoute);
+        {
+        uint16[] memory lBpDiffForMaxReward = new uint16[](2);
+        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = Constants.BP_SCALE;
+        _oracle.setRoute(address(lTokenA), address(lTokenC), lRoute, lBpDiffForMaxReward);
         _writePriceCache(address(lTokenA), address(lTokenB), 1e18);
         _writePriceCache(address(lTokenC), address(lTokenB), 1e18);
+        }
 
         // act
         uint256 lAmtCOut = _oracle.getQuote(10 ** lTokenADecimals, address(lTokenA), address(lTokenC));
@@ -252,9 +263,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.designatePair(address(lTokenA), address(lTokenB), lPair);
 
         address[] memory lRoute = new address[](2);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](1);
         (lRoute[0], lRoute[1]) =
             lTokenA < lTokenB ? (address(lTokenA), address(lTokenB)) : (address(lTokenB), address(lTokenA));
-        _oracle.setRoute(lRoute[0], lRoute[1], lRoute);
+        _oracle.setRoute(lRoute[0], lRoute[1], lRoute, lBpDiffForMaxReward);
         _writePriceCache(lRoute[0], lRoute[1], lPrice); // price written could be tokenB/tokenA or tokenA/tokenB depending on the fuzz addresses
 
         // act
@@ -312,7 +324,8 @@ contract ReservoirPriceOracleTest is BaseTest {
                 lTokenA < lTokenC ? (address(lTokenA), address(lTokenC)) : (address(lTokenC), address(lTokenA));
             lRoute[1] = address(lTokenB);
 
-            _oracle.setRoute(lRoute[0], lRoute[2], lRoute);
+            uint16[] memory lBpDiffMaxReward = new uint16[](2);
+            _oracle.setRoute(lRoute[0], lRoute[2], lRoute, lBpDiffMaxReward);
             _writePriceCache(
                 address(lTokenA) < address(lTokenB) ? address(lTokenA) : address(lTokenB),
                 address(lTokenA) < address(lTokenB) ? address(lTokenB) : address(lTokenA),
@@ -400,17 +413,6 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // assert
         assertEq(lAmtOut / 1e12, lAmtIn * lRate / 1e18);
-    }
-
-    function testUpdatePriceDeviationThreshold(uint256 aNewThreshold) external {
-        // assume
-        uint64 lNewThreshold = uint64(bound(aNewThreshold, 0, 0.1e18));
-
-        // act
-        _oracle.updatePriceDeviationThreshold(lNewThreshold);
-
-        // assert
-        assertEq(_oracle.priceDeviationThreshold(), lNewThreshold);
     }
 
     function testUpdateTwapPeriod(uint256 aNewPeriod) external {
@@ -554,11 +556,13 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lIntermediate2 = address(_tokenD);
         address lEnd = address(_tokenB);
         address[] memory lRoute = new address[](4);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](3);
+        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = lBpDiffForMaxReward[2] = Constants.BP_SCALE;
         lRoute[0] = lStart;
         lRoute[1] = lIntermediate1;
         lRoute[2] = lIntermediate2;
         lRoute[3] = lEnd;
-        _oracle.setRoute(lStart, lEnd, lRoute);
+        _oracle.setRoute(lStart, lEnd, lRoute, lBpDiffForMaxReward);
 
         ReservoirPair lAC = ReservoirPair(_createPair(address(_tokenA), address(_tokenC), 0));
         ReservoirPair lCD = ReservoirPair(_createPair(address(_tokenC), address(_tokenD), 0));
@@ -606,13 +610,15 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(_tokenB);
         address lToken1 = address(_tokenC);
         address[] memory lRoute = new address[](2);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](1);
+        lBpDiffForMaxReward[0] = Constants.BP_SCALE;
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
 
         // act
         vm.expectEmit(false, false, false, false);
         emit Route(lToken0, lToken1, lRoute);
-        _oracle.setRoute(lToken0, lToken1, lRoute);
+        _oracle.setRoute(lToken0, lToken1, lRoute, lBpDiffForMaxReward);
 
         // assert
         address[] memory lQueriedRoute = _oracle.route(lToken0, lToken1);
@@ -628,13 +634,15 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(_tokenB);
         address lToken1 = address(_tokenC);
         address[] memory lRoute = new address[](4);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](3);
+        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = lBpDiffForMaxReward[2] = Constants.BP_SCALE;
         lRoute[0] = lToken0;
         lRoute[1] = address(_tokenA);
         lRoute[2] = address(_tokenD);
         lRoute[3] = lToken1;
 
         // act
-        _oracle.setRoute(lToken0, lToken1, lRoute);
+        _oracle.setRoute(lToken0, lToken1, lRoute, lBpDiffForMaxReward);
 
         // assert
         address[] memory lQueriedRoute = _oracle.route(lToken0, lToken1);
@@ -667,6 +675,9 @@ contract ReservoirPriceOracleTest is BaseTest {
         lIntermediateRoute3[0] = lIntermediate2;
         lIntermediateRoute3[1] = lEnd;
 
+        uint16[] memory lBpDiffForMaxReward = new uint16[](3);
+        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = lBpDiffForMaxReward[2] = Constants.BP_SCALE;
+
         // act
         vm.expectEmit(false, false, false, true);
         emit Route(lIntermediate2, lEnd, lIntermediateRoute3);
@@ -677,7 +688,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         emit Route(lIntermediate2, lIntermediate1, lIntermediateRoute2);
         vm.expectEmit(false, false, false, true);
         emit Route(lStart, lEnd, lRoute);
-        _oracle.setRoute(lStart, lEnd, lRoute);
+
+        _oracle.setRoute(lStart, lEnd, lRoute, lBpDiffForMaxReward);
 
         // assert
         assertEq(_oracle.route(lStart, lEnd), lRoute);
@@ -691,9 +703,11 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(_tokenB);
         address lToken1 = address(_tokenC);
         address[] memory lRoute = new address[](2);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](1);
+        lBpDiffForMaxReward[0] = Constants.BP_SCALE;
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
-        _oracle.setRoute(lToken0, lToken1, lRoute);
+        _oracle.setRoute(lToken0, lToken1, lRoute, lBpDiffForMaxReward);
         address[] memory lQueriedRoute = _oracle.route(lToken0, lToken1);
         assertEq(lQueriedRoute, lRoute);
         _writePriceCache(lToken0, lToken1, 1e18);
@@ -713,11 +727,13 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testClearRoute_AllWordsCleared() external {
         // arrange
         address[] memory lRoute = new address[](4);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](3);
+        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = lBpDiffForMaxReward[2] = Constants.BP_SCALE;
         lRoute[0] = address(_tokenA);
         lRoute[1] = address(_tokenC);
         lRoute[2] = address(_tokenB);
         lRoute[3] = address(_tokenD);
-        _oracle.setRoute(address(_tokenA), address(_tokenD), lRoute);
+        _oracle.setRoute(address(_tokenA), address(_tokenD), lRoute, lBpDiffForMaxReward);
         address[] memory lQueriedRoute = _oracle.route(address(_tokenA), address(_tokenD));
         assertEq(lQueriedRoute, lRoute);
         bytes32 lSlot1 = address(_tokenA).calculateSlot(address(_tokenD));
@@ -838,11 +854,13 @@ contract ReservoirPriceOracleTest is BaseTest {
         lPair.sync();
 
         address[] memory lRoute = new address[](2);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](1);
+        lBpDiffForMaxReward[0] = Constants.BP_SCALE;
         lRoute[0] = address(_tokenB);
         lRoute[1] = address(_tokenC);
 
         _oracle.designatePair(address(_tokenB), address(_tokenC), lPair);
-        _oracle.setRoute(address(_tokenB), address(_tokenC), lRoute);
+        _oracle.setRoute(address(_tokenB), address(_tokenC), lRoute, lBpDiffForMaxReward);
 
         // act & assert
         vm.expectRevert(
@@ -859,12 +877,14 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(0x1);
         address lToken1 = address(0x1);
         address[] memory lRoute = new address[](2);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](1);
+        lBpDiffForMaxReward[0] = Constants.BP_SCALE;
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
 
         // act & assert
         vm.expectRevert(OracleErrors.InvalidTokensProvided.selector);
-        _oracle.setRoute(lToken0, lToken1, lRoute);
+        _oracle.setRoute(lToken0, lToken1, lRoute, lBpDiffForMaxReward);
     }
 
     function testSetRoute_NotSorted() external {
@@ -872,12 +892,14 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(0x21);
         address lToken1 = address(0x2);
         address[] memory lRoute = new address[](2);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](1);
+        lBpDiffForMaxReward[0] = Constants.BP_SCALE;
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
 
         // act & assert
         vm.expectRevert(OracleErrors.InvalidTokensProvided.selector);
-        _oracle.setRoute(lToken0, lToken1, lRoute);
+        _oracle.setRoute(lToken0, lToken1, lRoute, lBpDiffForMaxReward);
     }
 
     function testSetRoute_InvalidRouteLength() external {
@@ -885,6 +907,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(0x1);
         address lToken1 = address(0x2);
         address[] memory lTooLong = new address[](5);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](1);
+        lBpDiffForMaxReward[0] = Constants.BP_SCALE;
         lTooLong[0] = lToken0;
         lTooLong[1] = address(0);
         lTooLong[2] = address(0);
@@ -895,11 +919,11 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // act & assert
         vm.expectRevert(OracleErrors.InvalidRouteLength.selector);
-        _oracle.setRoute(lToken0, lToken1, lTooLong);
+        _oracle.setRoute(lToken0, lToken1, lTooLong, lBpDiffForMaxReward);
 
         // act & assert
         vm.expectRevert(OracleErrors.InvalidRouteLength.selector);
-        _oracle.setRoute(lToken0, lToken1, lTooShort);
+        _oracle.setRoute(lToken0, lToken1, lTooShort, lBpDiffForMaxReward);
     }
 
     function testSetRoute_InvalidRoute() external {
@@ -916,11 +940,14 @@ contract ReservoirPriceOracleTest is BaseTest {
         lInvalidRoute2[1] = address(54);
         lInvalidRoute2[2] = lToken1;
 
+        uint16[] memory lBpDiffForMaxReward = new uint16[](2);
+        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = Constants.BP_SCALE;
+
         // act & assert
         vm.expectRevert(OracleErrors.InvalidRoute.selector);
-        _oracle.setRoute(lToken0, lToken1, lInvalidRoute1);
+        _oracle.setRoute(lToken0, lToken1, lInvalidRoute1, lBpDiffForMaxReward);
         vm.expectRevert(OracleErrors.InvalidRoute.selector);
-        _oracle.setRoute(lToken0, lToken1, lInvalidRoute2);
+        _oracle.setRoute(lToken0, lToken1, lInvalidRoute2, lBpDiffForMaxReward);
     }
 
     function testUpdateRewardGasAmount_NotOwner() external {

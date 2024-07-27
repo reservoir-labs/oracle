@@ -12,5 +12,5 @@ library Constants {
     uint256 public constant WAD = 1e18;
     uint256 public constant MAX_SUPPORTED_PRICE = type(uint128).max;
     uint256 public constant MAX_AMOUNT_IN = type(uint128).max;
-    uint256 public constant BP_SCALE = 1e4;
+    uint16 public constant BP_SCALE = 1e4;
 }
