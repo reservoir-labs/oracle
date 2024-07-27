@@ -20,6 +20,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     using FixedPointMathLib for uint256;
     using LibSort for address[];
     using RoutesLib for bytes32;
+    using Utils for uint256;
     using QueryProcessor for ReservoirPair;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,8 +108,13 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken1 Address of the higher token.
     /// @return rPrice The cached price of aToken0/aToken1 for simple routes. Returns 0 for prices of composite routes.
     /// @return rDecimalDiff The difference in decimals as defined by aToken1.decimals() - aToken0.decimals(). Only valid for simple routes.
-    function priceCache(address aToken0, address aToken1) external view returns (uint256 rPrice, int256 rDecimalDiff) {
-        (rPrice, rDecimalDiff) = _priceCache(aToken0, aToken1);
+    /// @return rBpDiffForMaxReward The number of basis points at and beyond which the bounty payout for a price update is maximum.
+    function priceCache(address aToken0, address aToken1)
+        external
+        view
+        returns (uint256 rPrice, int256 rDecimalDiff, uint256 rBpDiffForMaxReward)
+    {
+        (rPrice, rDecimalDiff, rBpDiffForMaxReward) = _priceCache(aToken0, aToken1);
     }
 
     /// @notice Updates the TWAP price for all simple routes between `aTokenA` and `aTokenB`. Will also update intermediate routes if the route defined between
@@ -141,7 +147,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
             // if it's a simple route, we avoid loading the price again from storage
             if (lRoute.length != 2) {
-                (lPrevPrice,) = _priceCache(lToken0, lToken1);
+                (lPrevPrice,,) = _priceCache(lToken0, lToken1);
             }
 
             _writePriceCache(lToken0, lToken1, lNewPrice);
@@ -169,29 +175,18 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         rResult = lPair.getTimeWeightedAverage(aQuery.priceType, aQuery.secs, aQuery.ago, lIndex);
     }
 
-    function _calcPercentageDiff(uint256 aOriginal, uint256 aNew) private pure returns (uint256) {
-        unchecked {
-            if (aOriginal == 0) return 0;
-
-            // multiplication does not overflow as `aOriginal` and `aNew` is always less than or
-            // equal to `Constants.MAX_SUPPORTED_PRICE`, as checked in `_writePriceCache`
-            if (aOriginal > aNew) {
-                return (aOriginal - aNew) * 1e18 / aOriginal;
-            } else {
-                return (aNew - aOriginal) * 1e18 / aOriginal;
-            }
-        }
-    }
-
     function _rewardUpdater(uint256 aPrevPrice, uint256 aNewPrice, address aRecipient, uint256 aBpDiffForMaxReward)
         private
     {
-        uint256 lPercentDiff = _calcPercentageDiff(aPrevPrice, aNewPrice);
+        uint256 lPercentDiff = aPrevPrice.calcPercentageDiff(aNewPrice);
         if (lPercentDiff == 0) return;
         if (aRecipient == address(0)) return;
 
-        // can be unchecked
-        uint256 lBpForMaxRewardWAD = aBpDiffForMaxReward * Constants.WAD / Constants.BP_SCALE;
+        // SAFETY: this mul will not overflow as `aBpDiffForMaxReward` is capped by `Constants.BP_SCALE`
+        uint256 lBpForMaxRewardWAD;
+        unchecked {
+            lBpForMaxRewardWAD = aBpDiffForMaxReward * Constants.WAD / Constants.BP_SCALE;
+        }
         uint256 lReward = lPercentDiff > lBpForMaxRewardWAD ? lBpForMaxRewardWAD : lPercentDiff;
 
         // N.B. Revisit this whenever deployment on a new chain is needed
@@ -287,8 +282,12 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         }
     }
 
-    // performs an SLOAD to load 1 word which contains the simple price and decimal difference
-    function _priceCache(address aToken0, address aToken1) private view returns (uint256 rPrice, int256 rDecimalDiff) {
+    // performs an SLOAD to load 1 word which contains the simple price, decimal difference, and number of basis points for maximum reward
+    function _priceCache(address aToken0, address aToken1)
+        private
+        view
+        returns (uint256 rPrice, int256 rDecimalDiff, uint256 rBpDiffForMaxReward)
+    {
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
         bytes32 lData;
@@ -298,6 +297,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         if (lData.isSimplePrice()) {
             rPrice = lData.getPrice();
             rDecimalDiff = lData.getDecimalDifference();
+            rBpDiffForMaxReward = lData.getBpDiffForMaxReward();
         }
     }
 
@@ -357,7 +357,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             for (uint256 i = 0; i < lRoute.length - 1; ++i) {
                 (lToken0, lToken1) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
                 // it is assumed that intermediate routes defined here are simple routes and not composite routes
-                (lPrice, lDecimalDiff) = _priceCache(lToken0, lToken1);
+                (lPrice, lDecimalDiff,) = _priceCache(lToken0, lToken1);
 
                 if (lPrice == 0) revert OracleErrors.PriceZero();
                 lIntermediateAmount = _calcAmtOut(lIntermediateAmount, lPrice, lDecimalDiff, lRoute[i] != lToken0);
