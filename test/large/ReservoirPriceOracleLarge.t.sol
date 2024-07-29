@@ -7,7 +7,8 @@ import {
     FixedPointMathLib,
     MintableERC20,
     ReservoirPair,
-    IERC20
+    IERC20,
+    Constants
 } from "test/unit/ReservoirPriceOracle.t.sol";
 
 contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
@@ -77,7 +78,10 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
             lRoute[3] = aTokenAAddress;
         }
 
-        _oracle.setRoute(lRoute[0], lRoute[3], lRoute);
+        uint16[] memory lBpDiffForMaxReward = new uint16[](3);
+        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = lBpDiffForMaxReward[2] = Constants.BP_SCALE;
+
+        _oracle.setRoute(lRoute[0], lRoute[3], lRoute, lBpDiffForMaxReward);
         _writePriceCache(
             lTokenA < lTokenB ? aTokenAAddress : aTokenBAddress,
             lTokenA < lTokenB ? aTokenBAddress : aTokenAAddress,
