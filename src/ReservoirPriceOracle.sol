@@ -29,7 +29,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event FallbackOracleSet(address fallbackOracle);
-    event PriceUpdateRewardThreshold(address token0, address token1, uint16 bpForMaxReward);
+    event PriceUpdateRewardThreshold(address token0, address token1, uint16 threshold);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
     event TwapPeriod(uint256 newPeriod);
@@ -185,28 +185,37 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     function _rewardUpdater(uint256 aPrevPrice, uint256 aNewPrice, address aRecipient, uint256 aRewardThreshold)
         private
     {
-        uint256 lPercentDiff = aPrevPrice.calcPercentageDiff(aNewPrice);
-        if (lPercentDiff == 0) return;
         if (aRecipient == address(0)) return;
 
         // SAFETY: this mul will not overflow as `aRewardThreshold` is capped by `Constants.BP_SCALE`
-        uint256 lBpForMaxRewardWAD;
+        uint256 lRewardThresholdWAD;
         unchecked {
-            lBpForMaxRewardWAD = aRewardThreshold * Constants.WAD / Constants.BP_SCALE;
+            lRewardThresholdWAD = aRewardThreshold * Constants.WAD / Constants.BP_SCALE;
         }
-        uint256 lReward = lPercentDiff > lBpForMaxRewardWAD ? lBpForMaxRewardWAD : lPercentDiff;
 
-        // N.B. Revisit this whenever deployment on a new chain is needed
-        //
-        // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()`
-        // on ARB because the latter will always return the demand insensitive
-        // base fee, while the former can return higher fees during times of
-        // congestion
+        uint256 lPercentDiff = aPrevPrice.calcPercentageDiff(aNewPrice);
+        uint256 lPayoutAmt;
 
         // SAFETY: this mul will not overflow even in extreme cases of `block.basefee`.
-        uint256 lPayoutAmt;
         unchecked {
-            lPayoutAmt = block.basefee * rewardGasAmount * lReward / lBpForMaxRewardWAD;
+            if (lPercentDiff < lRewardThresholdWAD) {
+                return;
+            }
+            // payout max reward
+            else if (lPercentDiff >= lRewardThresholdWAD * MAX_REWARD_MULTIPLIER) {
+                // N.B. Revisit this whenever deployment on a new chain is needed
+                //
+                // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()`
+                // on ARB because the latter will always return the demand insensitive
+                // base fee, while the former can return higher fees during times of
+                // congestion
+                lPayoutAmt = block.basefee * rewardGasAmount * MAX_REWARD_MULTIPLIER;
+            } else {
+                assert(
+                    lPercentDiff >= lRewardThresholdWAD && lPercentDiff < lRewardThresholdWAD * MAX_REWARD_MULTIPLIER
+                );
+                lPayoutAmt = block.basefee * rewardGasAmount * lPercentDiff / lRewardThresholdWAD;
+            }
         }
 
         // does not revert under any circumstance
@@ -468,7 +477,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         _validateTokens(aToken0, aToken1);
         if (lRouteLength > Constants.MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
         if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
-        if (aRewardThresholds.length != lRouteLength - 1) revert OracleErrors.InvalidArrayLengthBpForMaxReward();
+        if (aRewardThresholds.length != lRouteLength - 1) revert OracleErrors.InvalidArrayLengthRewardThresholds();
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
@@ -480,7 +489,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            if (aRewardThresholds[0] > Constants.BP_SCALE) revert OracleErrors.InvalidBpForMaxReward();
+            if (aRewardThresholds[0] > Constants.BP_SCALE) revert OracleErrors.InvalidRewardThreshold();
 
             bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, aRewardThresholds[0]);
             assembly ("memory-safe") {

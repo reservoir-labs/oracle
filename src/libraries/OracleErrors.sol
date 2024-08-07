@@ -5,8 +5,8 @@ pragma solidity ^0.8.0;
 library OracleErrors {
     // config errors
     error IncorrectTokensDesignatePair();
-    error InvalidBpForMaxReward();
-    error InvalidArrayLengthBpForMaxReward();
+    error InvalidRewardThreshold();
+    error InvalidArrayLengthRewardThresholds();
     error InvalidRoute();
     error InvalidRouteLength();
     error InvalidTokensProvided();
