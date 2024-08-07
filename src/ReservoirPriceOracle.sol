@@ -27,12 +27,19 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     //                                       EVENTS                                              //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    event BpDiffForMaxReward(address token0, address token1, uint16 bpForMaxReward);
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event FallbackOracleSet(address fallbackOracle);
+    event PriceUpdateRewardThreshold(address token0, address token1, uint16 bpForMaxReward);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
     event TwapPeriod(uint256 newPeriod);
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    //                                       CONSTANTS                                           //
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    /// @notice The maximum multiplier of the gas reward for a price update.
+    uint256 public constant MAX_REWARD_MULTIPLIER = 4;
 
     /// @notice The type of price queried and stored, possibilities as defined by `PriceType`.
     PriceType public immutable PRICE_TYPE;
@@ -108,13 +115,13 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken1 Address of the higher token.
     /// @return rPrice The cached price of aToken0/aToken1 for simple routes. Returns 0 for prices of composite routes.
     /// @return rDecimalDiff The difference in decimals as defined by aToken1.decimals() - aToken0.decimals(). Only valid for simple routes.
-    /// @return rBpDiffForMaxReward The number of basis points at and beyond which the bounty payout for a price update is maximum.
+    /// @return rRewardThreshold The number of basis points at and beyond which the bounty payout for a price update is maximum.
     function priceCache(address aToken0, address aToken1)
         external
         view
-        returns (uint256 rPrice, int256 rDecimalDiff, uint256 rBpDiffForMaxReward)
+        returns (uint256 rPrice, int256 rDecimalDiff, uint256 rRewardThreshold)
     {
-        (rPrice, rDecimalDiff, rBpDiffForMaxReward) = _priceCache(aToken0, aToken1);
+        (rPrice, rDecimalDiff, rRewardThreshold) = _priceCache(aToken0, aToken1);
     }
 
     /// @notice Updates the TWAP price for all simple routes between `aTokenA` and `aTokenB`. Will also update intermediate routes if the route defined between
@@ -128,7 +135,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
-        (address[] memory lRoute,, uint256 lPrevPrice, uint256 lBpDiffForMaxReward) =
+        (address[] memory lRoute,, uint256 lPrevPrice, uint256 lRewardThreshold) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
         if (lRoute.length == 0) revert OracleErrors.NoPath();
 
@@ -151,7 +158,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             }
 
             _writePriceCache(lToken0, lToken1, lNewPrice);
-            _rewardUpdater(lPrevPrice, lNewPrice, aRewardRecipient, lBpDiffForMaxReward);
+            _rewardUpdater(lPrevPrice, lNewPrice, aRewardRecipient, lRewardThreshold);
         }
     }
 
@@ -175,17 +182,17 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         rResult = lPair.getTimeWeightedAverage(aQuery.priceType, aQuery.secs, aQuery.ago, lIndex);
     }
 
-    function _rewardUpdater(uint256 aPrevPrice, uint256 aNewPrice, address aRecipient, uint256 aBpDiffForMaxReward)
+    function _rewardUpdater(uint256 aPrevPrice, uint256 aNewPrice, address aRecipient, uint256 aRewardThreshold)
         private
     {
         uint256 lPercentDiff = aPrevPrice.calcPercentageDiff(aNewPrice);
         if (lPercentDiff == 0) return;
         if (aRecipient == address(0)) return;
 
-        // SAFETY: this mul will not overflow as `aBpDiffForMaxReward` is capped by `Constants.BP_SCALE`
+        // SAFETY: this mul will not overflow as `aRewardThreshold` is capped by `Constants.BP_SCALE`
         uint256 lBpForMaxRewardWAD;
         unchecked {
-            lBpForMaxRewardWAD = aBpDiffForMaxReward * Constants.WAD / Constants.BP_SCALE;
+            lBpForMaxRewardWAD = aRewardThreshold * Constants.WAD / Constants.BP_SCALE;
         }
         uint256 lReward = lPercentDiff > lBpForMaxRewardWAD ? lBpForMaxRewardWAD : lPercentDiff;
 
@@ -211,11 +218,11 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @return rRoute The route to determine the price between aToken0 and aToken1
     /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise
     /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise
-    /// @return rBpDiffForMaxReward The price difference at and beyond which the maximum amount of gas bounty is applicable.
+    /// @return rRewardThreshold The price difference at and beyond which the maximum amount of gas bounty is applicable.
     function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
         private
         view
-        returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice, uint256 rBpDiffForMaxReward)
+        returns (address[] memory rRoute, int256 rDecimalDiff, uint256 rPrice, uint256 rRewardThreshold)
     {
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
@@ -231,7 +238,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             rRoute[1] = aToken1;
             rDecimalDiff = lFirstWord.getDecimalDifference();
             rPrice = lFirstWord.getPrice();
-            rBpDiffForMaxReward = lFirstWord.getBpDiffForMaxReward();
+            rRewardThreshold = lFirstWord.getRewardThreshold();
         }
         // composite route
         else if (lFirstWord.isCompositeRoute()) {
@@ -286,7 +293,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     function _priceCache(address aToken0, address aToken1)
         private
         view
-        returns (uint256 rPrice, int256 rDecimalDiff, uint256 rBpDiffForMaxReward)
+        returns (uint256 rPrice, int256 rDecimalDiff, uint256 rRewardThreshold)
     {
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
@@ -297,7 +304,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         if (lData.isSimplePrice()) {
             rPrice = lData.getPrice();
             rDecimalDiff = lData.getDecimalDifference();
-            rBpDiffForMaxReward = lData.getBpDiffForMaxReward();
+            rRewardThreshold = lData.getRewardThreshold();
         }
     }
 
@@ -311,7 +318,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         }
         if (!lData.isSimplePrice()) revert OracleErrors.WriteToNonSimpleRoute();
 
-        lData = RoutesLib.packSimplePrice(lData.getDecimalDifference(), aNewPrice, lData.getBpDiffForMaxReward());
+        lData = RoutesLib.packSimplePrice(lData.getDecimalDifference(), aNewPrice, lData.getRewardThreshold());
         assembly ("memory-safe") {
             sstore(lSlot, lData)
         }
@@ -451,8 +458,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken0 Address of the lower token.
     /// @param aToken1 Address of the higher token.
     /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived.
-    /// @param aBpDiffForMaxReward Array of basis points at and beyond which the bounty payout for a price update is maximum.
-    function setRoute(address aToken0, address aToken1, address[] memory aRoute, uint16[] memory aBpDiffForMaxReward)
+    /// @param aRewardThresholds Array of basis points at and beyond which the bounty payout for a price update is maximum.
+    function setRoute(address aToken0, address aToken1, address[] memory aRoute, uint16[] memory aRewardThresholds)
         public
         onlyOwner
     {
@@ -461,7 +468,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         _validateTokens(aToken0, aToken1);
         if (lRouteLength > Constants.MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
         if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
-        if (aBpDiffForMaxReward.length != lRouteLength - 1) revert OracleErrors.InvalidArrayLengthBpForMaxReward();
+        if (aRewardThresholds.length != lRouteLength - 1) revert OracleErrors.InvalidArrayLengthBpForMaxReward();
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
@@ -473,15 +480,15 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            if (aBpDiffForMaxReward[0] > Constants.BP_SCALE) revert OracleErrors.InvalidBpForMaxReward();
+            if (aRewardThresholds[0] > Constants.BP_SCALE) revert OracleErrors.InvalidBpForMaxReward();
 
-            bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, aBpDiffForMaxReward[0]);
+            bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, aRewardThresholds[0]);
             assembly ("memory-safe") {
                 // Write data to storage.
                 sstore(lSlot, lData)
             }
 
-            emit BpDiffForMaxReward(aToken0, aToken1, aBpDiffForMaxReward[0]);
+            emit PriceUpdateRewardThreshold(aToken0, aToken1, aRewardThresholds[0]);
         }
         // composite route
         else {
@@ -501,10 +508,10 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
                     sstore(lSlot, lFirstWord)
                     sstore(add(lSlot, 1), lSecondWord)
                 }
-                _checkAndPopulateIntermediateRoute(lThirdToken, aToken1, aBpDiffForMaxReward[2]);
+                _checkAndPopulateIntermediateRoute(lThirdToken, aToken1, aRewardThresholds[2]);
             }
-            _checkAndPopulateIntermediateRoute(aToken0, lSecondToken, aBpDiffForMaxReward[0]);
-            _checkAndPopulateIntermediateRoute(lSecondToken, lThirdToken, aBpDiffForMaxReward[1]);
+            _checkAndPopulateIntermediateRoute(aToken0, lSecondToken, aRewardThresholds[0]);
+            _checkAndPopulateIntermediateRoute(lSecondToken, lThirdToken, aRewardThresholds[1]);
         }
         emit Route(aToken0, aToken1, aRoute);
     }

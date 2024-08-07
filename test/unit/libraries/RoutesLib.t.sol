@@ -46,7 +46,7 @@ contract RoutesLibTest is Test {
         // assert
         assertEq(lResult[0], RoutesLib.FLAG_SIMPLE_PRICE);
         assertEq(lResult[1], bytes1(uint8(aDiff)));
-        assertEq(lResult.getBpDiffForMaxReward(), Constants.BP_SCALE);
+        assertEq(lResult.getRewardThreshold(), Constants.BP_SCALE);
         assertEq(lResult.getPrice(), lPrice);
     }
 }

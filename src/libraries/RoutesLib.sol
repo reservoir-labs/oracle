@@ -29,15 +29,15 @@ library RoutesLib {
 
     // Assumes that aDecimalDifference is between -18 and 18
     // Assumes that aPrice is between 1 and 1e36
-    // Assumes that aBpDiffForMaxReward is <= Constants.BP_SCALE
-    function packSimplePrice(int256 aDecimalDifference, uint256 aPrice, uint16 aBpDiffForMaxReward)
+    // Assumes that aRewardThreshold is <= Constants.BP_SCALE
+    function packSimplePrice(int256 aDecimalDifference, uint256 aPrice, uint16 aRewardThreshold)
         internal
         pure
         returns (bytes32 rPacked)
     {
         bytes32 lDecimalDifferenceRaw = bytes1(uint8(int8(aDecimalDifference)));
-        bytes32 lBpDiffForMaxReward = bytes2(uint16(aBpDiffForMaxReward));
-        rPacked = FLAG_SIMPLE_PRICE | lDecimalDifferenceRaw >> 8 | lBpDiffForMaxReward >> 16 | bytes32(aPrice);
+        bytes32 lRewardThreshold = bytes2(uint16(aRewardThreshold));
+        rPacked = FLAG_SIMPLE_PRICE | lDecimalDifferenceRaw >> 8 | lRewardThreshold >> 16 | bytes32(aPrice);
     }
 
     function pack2HopRoute(address aSecondToken) internal pure returns (bytes32 rPacked) {
@@ -65,7 +65,7 @@ library RoutesLib {
         rPrice = uint256(aData & 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
     }
 
-    function getBpDiffForMaxReward(bytes32 aData) internal pure returns (uint16 rBpDiffForMaxReward) {
+    function getRewardThreshold(bytes32 aData) internal pure returns (uint16 rBpDiffForMaxReward) {
         rBpDiffForMaxReward =
             uint16(uint256((aData & 0x0000ffff00000000000000000000000000000000000000000000000000000000) >> 224));
     }
