@@ -30,7 +30,7 @@ library RoutesLib {
     // Assumes that aDecimalDifference is between -18 and 18
     // Assumes that aPrice is between 1 and 1e36
     // Assumes that aRewardThreshold is <= Constants.BP_SCALE
-    function packSimplePrice(int256 aDecimalDifference, uint256 aPrice, uint16 aRewardThreshold)
+    function packSimplePrice(int256 aDecimalDifference, uint256 aPrice, uint256 aRewardThreshold)
         internal
         pure
         returns (bytes32 rPacked)

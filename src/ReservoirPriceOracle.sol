@@ -29,7 +29,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     event DesignatePair(address token0, address token1, ReservoirPair pair);
     event FallbackOracleSet(address fallbackOracle);
-    event PriceUpdateRewardThreshold(address token0, address token1, uint16 threshold);
+    event PriceUpdateRewardThreshold(address token0, address token1, uint256 threshold);
     event RewardGasAmount(uint256 newAmount);
     event Route(address token0, address token1, address[] route);
     event TwapPeriod(uint256 newPeriod);

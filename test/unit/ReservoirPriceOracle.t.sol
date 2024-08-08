@@ -268,6 +268,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         address[] memory lRoute = new address[](2);
         uint16[] memory lRewardThreshold = new uint16[](1);
+        lRewardThreshold[0] = Constants.BP_SCALE;
         (lRoute[0], lRoute[1]) =
             lTokenA < lTokenB ? (address(lTokenA), address(lTokenB)) : (address(lTokenB), address(lTokenA));
         _oracle.setRoute(lRoute[0], lRoute[1], lRoute, lRewardThreshold);
@@ -329,6 +330,7 @@ contract ReservoirPriceOracleTest is BaseTest {
             lRoute[1] = address(lTokenB);
 
             uint16[] memory lRewardThreshold = new uint16[](2);
+            lRewardThreshold[0] = lRewardThreshold[1] = Constants.BP_SCALE;
             _oracle.setRoute(lRoute[0], lRoute[2], lRoute, lRewardThreshold);
             _writePriceCache(
                 address(lTokenA) < address(lTokenB) ? address(lTokenA) : address(lTokenB),
@@ -341,6 +343,7 @@ contract ReservoirPriceOracleTest is BaseTest {
                 lPrice2
             );
         }
+
         // act
         uint256 lAmtCOut = _oracle.getQuote(lAmtIn * 10 ** lTokenADecimal, address(lTokenA), address(lTokenC));
 
@@ -1022,6 +1025,23 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.setRoute(lToken0, lToken1, lInvalidRoute1, lRewardThreshold);
         vm.expectRevert(OracleErrors.InvalidRoute.selector);
         _oracle.setRoute(lToken0, lToken1, lInvalidRoute2, lRewardThreshold);
+    }
+
+    function testSetRoute_InvalidRewardThreshold() external {
+        // arrange
+        address[] memory lRoute = new address[](2);
+        uint16[] memory lInvalidRewardThreshold = new uint16[](1);
+        lInvalidRewardThreshold[0] = Constants.BP_SCALE + 1;
+        lRoute[0] = address(_tokenC);
+        lRoute[1] = address(_tokenD);
+
+        // act & assert
+        vm.expectRevert(OracleErrors.InvalidRewardThreshold.selector);
+        _oracle.setRoute(lRoute[0], lRoute[1], lRoute, lInvalidRewardThreshold);
+
+        lInvalidRewardThreshold[0] = 0;
+        vm.expectRevert(OracleErrors.InvalidRewardThreshold.selector);
+        _oracle.setRoute(lRoute[0], lRoute[1], lRoute, lInvalidRewardThreshold);
     }
 
     function testUpdateRewardGasAmount_NotOwner() external {
