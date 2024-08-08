@@ -33,7 +33,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     event Route(address token0, address token1, address[] route);
 
     uint256 internal constant WAD = 1e18;
-
+    uint256 internal constant ORACLE_STARTING_BALANCE = 10 ether;
     address internal constant ADDRESS_THRESHOLD = address(0x1000);
 
     // to keep track of addresses to ensure no clash for fuzz tests
@@ -67,7 +67,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         // make sure ether balance of test contract is 0
         deal(address(this), 0);
-        deal(address(_oracle), 10 ether);
+        deal(address(_oracle), ORACLE_STARTING_BALANCE);
 
         _addressSet.add(address(_tokenA));
         _addressSet.add(address(_tokenB));
@@ -489,7 +489,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         console2.log(lStartingPrice);
         skip(1);
         _pair.sync();
-        skip(_oracle.twapPeriod() + 1);
+        skip(_oracle.twapPeriod());
         _pair.sync();
 
         // act
@@ -501,54 +501,72 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(address(this).balance, 0); // no reward as the price did not move sufficiently
     }
 
-    function testUpdatePrice_AboveThresholdBelowMax() external {
+    function testUpdatePrice_AboveThresholdBelowMaxReward(uint256 aPercentDiff) external {
+        // assume
+        (,, uint256 lRewardThreshold) = _oracle.priceCache(address(_tokenA), address(_tokenB));
+        uint256 lRewardThresholdWAD = lRewardThreshold * WAD / Constants.BP_SCALE;
+        uint256 lPercentDiff = bound(
+            aPercentDiff,
+            lRewardThresholdWAD,
+            _oracle.MAX_REWARD_MULTIPLIER() * lRewardThreshold * WAD / Constants.BP_SCALE
+        );
+
         // arrange
-        uint256 lOriginalPrice = 98.9223e18;
-        _writePriceCache(address(_tokenA), address(_tokenB), lOriginalPrice);
+        uint256 lCurrentPrice = 98_918_868_099_219_913_512;
+        uint256 lStartingPrice = lCurrentPrice * WAD / (WAD + lPercentDiff);
+        _writePriceCache(address(_tokenA), address(_tokenB), lStartingPrice);
 
         skip(1);
         _pair.sync();
-        skip(_oracle.twapPeriod() * 2);
-        _tokenA.mint(address(_pair), 2e18);
-        _pair.swap(2e18, true, address(this), "");
+        skip(_oracle.twapPeriod());
+        _pair.sync();
 
         // act
         _oracle.updatePrice(address(_tokenB), address(_tokenA), address(this));
 
         // assert
         (uint256 lPrice,,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
-        assertEq(lPrice, 98_918_868_099_219_913_512);
+        assertEq(lPrice, lCurrentPrice);
         uint256 lExpectedRewardReceived =
-            block.basefee * _oracle.rewardGasAmount() * lOriginalPrice.calcPercentageDiff(lPrice) / 1e18;
+            block.basefee * _oracle.rewardGasAmount() * lPercentDiff / lRewardThresholdWAD;
+        assertGe(lExpectedRewardReceived, block.basefee * _oracle.rewardGasAmount());
+        assertLe(lExpectedRewardReceived, block.basefee * _oracle.rewardGasAmount() * _oracle.MAX_REWARD_MULTIPLIER());
         assertEq(address(this).balance, lExpectedRewardReceived); // some reward received but is less than max possible reward
     }
 
-    function testUpdatePrice_BeyondMaxReward() external {
+    function testUpdatePrice_BeyondMaxReward(uint256 aPercentDiff) external {
+        // assume
+        (,, uint256 lRewardThreshold) = _oracle.priceCache(address(_tokenA), address(_tokenB));
+        uint256 lPercentDiff = bound(
+            aPercentDiff,
+            _oracle.MAX_REWARD_MULTIPLIER() * lRewardThreshold * WAD / Constants.BP_SCALE,
+            WAD // 100%
+        );
+
         // arrange
-        _writePriceCache(address(_tokenA), address(_tokenB), 5e18);
+        uint256 lCurrentPrice = 98_918_868_099_219_913_512;
+        uint256 lStartingPrice = lCurrentPrice * WAD / (WAD + lPercentDiff);
+        _writePriceCache(address(_tokenA), address(_tokenB), lStartingPrice);
 
         skip(1);
         _pair.sync();
-        skip(_oracle.twapPeriod() * 2);
-        _tokenA.mint(address(_pair), 2e18);
-        _pair.swap(2e18, true, address(this), "");
+        skip(_oracle.twapPeriod());
+        _pair.sync();
 
         // act
         _oracle.updatePrice(address(_tokenB), address(_tokenA), address(this));
 
         // assert
         (uint256 lPrice,,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
-        assertEq(lPrice, 98_918_868_099_219_913_512);
-        (lPrice,,) = _oracle.priceCache(address(_tokenB), address(_tokenA));
-        assertEq(lPrice, 0);
-        uint256 lExpectedRewardReceived = block.basefee * _oracle.rewardGasAmount();
+        assertEq(lPrice, lCurrentPrice);
+        uint256 lExpectedRewardReceived = block.basefee * _oracle.rewardGasAmount() * _oracle.MAX_REWARD_MULTIPLIER();
         assertEq(address(this).balance, lExpectedRewardReceived);
-        assertEq(address(_oracle).balance, 1 ether - lExpectedRewardReceived);
+        assertEq(address(_oracle).balance, ORACLE_STARTING_BALANCE - lExpectedRewardReceived);
     }
 
     function testUpdatePrice_RewardEligible_InsufficientReward(uint256 aRewardAvailable) external {
         // assume
-        uint256 lRewardAvailable = bound(aRewardAvailable, 1, block.basefee * _oracle.rewardGasAmount() - 1);
+        uint256 lRewardAvailable = bound(aRewardAvailable, 1, block.basefee * _oracle.rewardGasAmount() * _oracle.MAX_REWARD_MULTIPLIER() - 1);
 
         // arrange
         deal(address(_oracle), lRewardAvailable);
@@ -576,9 +594,8 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         skip(1);
         _pair.sync();
-        skip(_oracle.twapPeriod() * 2);
-        _tokenA.mint(address(_pair), 2e18);
-        _pair.swap(2e18, true, address(this), "");
+        skip(_oracle.twapPeriod());
+        _pair.sync();
 
         // act
         _oracle.updatePrice(address(_tokenA), address(_tokenB), address(0));
@@ -587,6 +604,24 @@ contract ReservoirPriceOracleTest is BaseTest {
         (uint256 lPrice,,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
         assertNotEq(lPrice, 5e18);
         assertEq(address(_oracle).balance, lOracleBalanceStart);
+    }
+
+    function testUpdatePrice_RewardEligible_ContractNoReceive() external {
+        // arrange
+        _writePriceCache(address(_tokenA), address(_tokenB), 5e18);
+
+        skip(1);
+        _pair.sync();
+        skip(_oracle.twapPeriod());
+        _pair.sync();
+
+        // act
+        _oracle.updatePrice(address(_tokenA), address(_tokenB), address(_pair)); // recipient set to any contract that doesn't have a `receive` function
+
+        // assert
+        (uint256 lPrice,,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
+        assertNotEq(lPrice, 5e18); // price is updated nonetheless
+        assertEq(address(_pair).balance, 0);
     }
 
     function testUpdatePrice_IntermediateRoutes() external {
