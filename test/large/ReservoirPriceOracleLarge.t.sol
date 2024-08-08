@@ -78,10 +78,10 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
             lRoute[3] = aTokenAAddress;
         }
 
-        uint16[] memory lBpDiffForMaxReward = new uint16[](3);
-        lBpDiffForMaxReward[0] = lBpDiffForMaxReward[1] = lBpDiffForMaxReward[2] = Constants.BP_SCALE;
+        uint16[] memory lRewardThresholds = new uint16[](3);
+        lRewardThresholds[0] = lRewardThresholds[1] = lRewardThresholds[2] = Constants.BP_SCALE;
 
-        _oracle.setRoute(lRoute[0], lRoute[3], lRoute, lBpDiffForMaxReward);
+        _oracle.setRoute(lRoute[0], lRoute[3], lRoute, lRewardThresholds);
         _writePriceCache(
             lTokenA < lTokenB ? aTokenAAddress : aTokenBAddress,
             lTokenA < lTokenB ? aTokenBAddress : aTokenAAddress,
