@@ -65,8 +65,8 @@ library RoutesLib {
         rPrice = uint256(aData & 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
     }
 
-    function getRewardThreshold(bytes32 aData) internal pure returns (uint16 rBpDiffForMaxReward) {
-        rBpDiffForMaxReward =
+    function getRewardThreshold(bytes32 aData) internal pure returns (uint16 rRewardThreshold) {
+        rRewardThreshold =
             uint16(uint256((aData & 0x0000ffff00000000000000000000000000000000000000000000000000000000) >> 224));
     }
 

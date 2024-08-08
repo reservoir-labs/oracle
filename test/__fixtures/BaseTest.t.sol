@@ -16,10 +16,13 @@ import { ReservoirPriceOracle, PriceType, IPriceOracle } from "src/ReservoirPric
 contract BaseTest is Test {
     using FactoryStoreLib for GenericFactory;
 
+    uint64 internal constant DEFAULT_REWARD_GAS_AMOUNT = 200_000;
+
     GenericFactory internal _factory = new GenericFactory();
     ReservoirPair internal _pair;
 
-    ReservoirPriceOracle internal _oracle = new ReservoirPriceOracle(0.15 minutes, 500_000, PriceType.CLAMPED_PRICE);
+    ReservoirPriceOracle internal _oracle =
+        new ReservoirPriceOracle(0.15 minutes, DEFAULT_REWARD_GAS_AMOUNT, PriceType.CLAMPED_PRICE);
 
     MintableERC20 internal _tokenA = MintableERC20(address(0x100));
     MintableERC20 internal _tokenB = MintableERC20(address(0x200));
