@@ -115,7 +115,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken1 Address of the higher token.
     /// @return rPrice The cached price of aToken0/aToken1 for simple routes. Returns 0 for prices of composite routes.
     /// @return rDecimalDiff The difference in decimals as defined by aToken1.decimals() - aToken0.decimals(). Only valid for simple routes.
-    /// @return rRewardThreshold The number of basis points at and beyond which the bounty payout for a price update is maximum.
+    /// @return rRewardThreshold The number of basis points of difference in price at and beyond which a reward is applicable for a price update.
     function priceCache(address aToken0, address aToken1)
         external
         view
@@ -187,7 +187,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     {
         if (aRecipient == address(0)) return;
 
-        // SAFETY: this mul will not overflow as `aRewardThreshold` is capped by `Constants.BP_SCALE`
+        // SAFETY: this mul will not overflow as 0 < `aRewardThreshold` <= `Constants.BP_SCALE`, as checked by `setRoute`
         uint256 lRewardThresholdWAD;
         unchecked {
             lRewardThresholdWAD = aRewardThreshold * Constants.WAD / Constants.BP_SCALE;
@@ -214,7 +214,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
                 assert(
                     lPercentDiff >= lRewardThresholdWAD && lPercentDiff < lRewardThresholdWAD * MAX_REWARD_MULTIPLIER
                 );
-                lPayoutAmt = block.basefee * rewardGasAmount * lPercentDiff / lRewardThresholdWAD;
+                lPayoutAmt = block.basefee * rewardGasAmount * lPercentDiff / lRewardThresholdWAD; // denominator is never 0
             }
         }
 
@@ -227,7 +227,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @return rRoute The route to determine the price between aToken0 and aToken1
     /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise
     /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise
-    /// @return rRewardThreshold The price difference at and beyond which the maximum amount of gas bounty is applicable.
+    /// @return rRewardThreshold The number of basis points of difference in price at and beyond which a reward is applicable for a price update.
     function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
         private
         view
@@ -298,7 +298,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         }
     }
 
-    // performs an SLOAD to load 1 word which contains the simple price, decimal difference, and number of basis points for maximum reward
+    // performs an SLOAD to load 1 word which contains the simple price, decimal difference, and the reward threshold
     function _priceCache(address aToken0, address aToken1)
         private
         view
@@ -467,7 +467,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken0 Address of the lower token.
     /// @param aToken1 Address of the higher token.
     /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived.
-    /// @param aRewardThresholds Array of basis points at and beyond which the bounty payout for a price update is maximum.
+    /// @param aRewardThresholds Array of basis points at and beyond which a reward is applicable for a price update.
     function setRoute(address aToken0, address aToken1, address[] memory aRoute, uint16[] memory aRewardThresholds)
         public
         onlyOwner
@@ -489,15 +489,16 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
-            if (aRewardThresholds[0] > Constants.BP_SCALE) revert OracleErrors.InvalidRewardThreshold();
+            uint256 lRewardThreshold = aRewardThresholds[0];
+            if (lRewardThreshold > Constants.BP_SCALE || lRewardThreshold == 0) revert OracleErrors.InvalidRewardThreshold();
 
-            bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, aRewardThresholds[0]);
+            bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, lRewardThreshold);
             assembly ("memory-safe") {
                 // Write data to storage.
                 sstore(lSlot, lData)
             }
 
-            emit PriceUpdateRewardThreshold(aToken0, aToken1, aRewardThresholds[0]);
+            emit PriceUpdateRewardThreshold(aToken0, aToken1, lRewardThreshold);
         }
         // composite route
         else {
