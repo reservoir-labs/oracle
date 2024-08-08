@@ -486,7 +486,6 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint256 lStartingPrice = lCurrentPrice * WAD / (WAD + lPercentDiff);
         _writePriceCache(address(_tokenA), address(_tokenB), lStartingPrice);
 
-        console2.log(lStartingPrice);
         skip(1);
         _pair.sync();
         skip(_oracle.twapPeriod());
