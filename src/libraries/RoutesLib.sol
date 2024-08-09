@@ -54,9 +54,8 @@ library RoutesLib {
         rSecondWord = bytes20(aThirdToken);
     }
 
-    // Positive value indicates that token1 has a greater number of decimals compared to token2
-    // while a negative value indicates otherwise.
-    // range of values between -18 and 18
+    // Positive value indicates that token1 has a greater number of decimals compared to token0
+    // while a negative value indicates otherwise. Range of values is between -18 and 18
     function getDecimalDifference(bytes32 aData) internal pure returns (int256 rDiff) {
         rDiff = int8(uint8(aData[1]));
     }
