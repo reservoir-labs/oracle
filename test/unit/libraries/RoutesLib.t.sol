@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 import { Test, console2, stdError } from "forge-std/Test.sol";
 
 import { RoutesLib } from "src/libraries/RoutesLib.sol";
+import { Constants } from "src/libraries/Constants.sol";
 
 contract RoutesLibTest is Test {
     using RoutesLib for bytes32;
@@ -40,11 +41,12 @@ contract RoutesLibTest is Test {
         uint256 lPrice = bound(aPrice, 1, 1e36);
 
         // act
-        bytes32 lResult = int256(aDiff).packSimplePrice(lPrice);
+        bytes32 lResult = int256(aDiff).packSimplePrice(lPrice, Constants.BP_SCALE);
 
         // assert
         assertEq(lResult[0], RoutesLib.FLAG_SIMPLE_PRICE);
         assertEq(lResult[1], bytes1(uint8(aDiff)));
+        assertEq(lResult.getRewardThreshold(), Constants.BP_SCALE);
         assertEq(lResult.getPrice(), lPrice);
     }
 }
