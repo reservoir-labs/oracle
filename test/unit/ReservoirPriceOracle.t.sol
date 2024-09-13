@@ -640,7 +640,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lEnd = address(_tokenB);
         address[] memory lRoute = new address[](4);
         uint16[] memory lRewardThreshold = new uint16[](3);
-        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.BP_SCALE;
+        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = 3; // 3bp
         lRoute[0] = lStart;
         lRoute[1] = lIntermediate1;
         lRoute[2] = lIntermediate2;
@@ -672,10 +672,10 @@ contract ReservoirPriceOracleTest is BaseTest {
         lAC.sync();
         lCD.sync();
         lBD.sync();
-        skip(_oracle.twapPeriod() * 2);
+        skip(_oracle.twapPeriod());
 
         // act
-        _oracle.updatePrice(address(_tokenA), address(_tokenB), address(this));
+        uint256 lReward = _oracle.updatePrice(address(_tokenA), address(_tokenB), address(this));
 
         // assert
         (uint256 lPriceAC,,) = _oracle.priceCache(lStart, lIntermediate1);
@@ -686,6 +686,26 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertApproxEqRel(lPriceCD, 2e18, 0.0001e18);
         assertApproxEqRel(lPriceBD, 2e18, 0.0001e18);
         assertEq(lPriceAB, 0); // composite price is not stored in the cache
+        assertEq(lReward, 0);
+
+        // arrange
+        skip(_oracle.twapPeriod());
+
+        // act
+        uint256 lSwapAmt =  1_000_000;
+        _tokenA.mint(address(lAC), lSwapAmt * 10 ** _tokenA.decimals());
+        lAC.swap(int256(lSwapAmt * 10 ** _tokenA.decimals()), true, address(this), "");
+
+        _tokenC.mint(address(lCD), lSwapAmt * 10 ** _tokenC.decimals());
+        lCD.swap(int256(lSwapAmt * 10 ** _tokenC.decimals()), true, address(this), "");
+
+        _tokenB.mint(address(lBD), lSwapAmt * 10 ** _tokenB.decimals());
+        lBD.swap(int256(lSwapAmt * 10 ** _tokenB.decimals()), true, address(this), "");
+
+        skip(_oracle.twapPeriod());
+
+        lReward = _oracle.updatePrice(address(_tokenA), address(_tokenB), address(this));
+        assertGt(lReward, _oracle.rewardGasAmount() * 3); // ensure that rewards have accumulated
     }
 
     function testSetRoute() public {

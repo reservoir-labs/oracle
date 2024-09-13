@@ -160,11 +160,14 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
             // if it's a simple route, we avoid loading the price again from storage
             if (lRoute.length != 2) {
-                (lPrevPrice,,) = _priceCache(lToken0, lToken1);
+                (lPrevPrice,, lRewardThreshold) = _priceCache(lToken0, lToken1);
             }
 
             _writePriceCache(lToken0, lToken1, lNewPrice);
-            rTotalReward += _calculateReward(lPrevPrice, lNewPrice, lRewardThreshold);
+            // SAFETY: This will not overflow for, and hops are limited by `MAX_ROUTE_LENGTH`
+            unchecked {
+                rTotalReward += _calculateReward(lPrevPrice, lNewPrice, lRewardThreshold);
+            }
         }
         _rewardUpdater(aRewardRecipient, rTotalReward);
     }
@@ -224,7 +227,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     }
 
     function _rewardUpdater(address aRecipient, uint256 aReward) private {
-        if (aRecipient == address(0)) return;
+        if (aRecipient == address(0) || aReward == 0) return;
 
         // does not revert under any circumstance
         assembly ("memory-safe") {
