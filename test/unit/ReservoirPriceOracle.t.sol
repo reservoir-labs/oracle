@@ -529,8 +529,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         // assert
         (uint256 lPrice,,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
         assertEq(lPrice, lCurrentPrice);
-        uint256 lExpectedRewardReceived =
-            block.basefee * _oracle.rewardGasAmount() * lPercentDiff / lRewardThresholdWAD;
+        uint256 lExpectedRewardReceived = block.basefee * _oracle.rewardGasAmount() * lPercentDiff / lRewardThresholdWAD;
         assertGe(lExpectedRewardReceived, block.basefee * _oracle.rewardGasAmount());
         assertLe(lExpectedRewardReceived, block.basefee * _oracle.rewardGasAmount() * _oracle.MAX_REWARD_MULTIPLIER());
         assertEq(address(this).balance, lExpectedRewardReceived); // some reward received but is less than max possible reward
@@ -568,7 +567,8 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testUpdatePrice_RewardEligible_InsufficientReward(uint256 aRewardAvailable) external {
         // assume
-        uint256 lRewardAvailable = bound(aRewardAvailable, 1, block.basefee * _oracle.rewardGasAmount() * _oracle.MAX_REWARD_MULTIPLIER() - 1);
+        uint256 lRewardAvailable =
+            bound(aRewardAvailable, 1, block.basefee * _oracle.rewardGasAmount() * _oracle.MAX_REWARD_MULTIPLIER() - 1);
 
         // arrange
         deal(address(_oracle), lRewardAvailable);
