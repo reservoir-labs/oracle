@@ -164,7 +164,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             }
 
             _writePriceCache(lToken0, lToken1, lNewPrice);
-            // SAFETY: This will not overflow for, and hops are limited by `MAX_ROUTE_LENGTH`
+            // SAFETY: This will not overflow even if reward gas amount is set to the block gas limit (30M at time if writing),
+            // and hops are limited by `MAX_ROUTE_LENGTH`.
             unchecked {
                 rTotalReward += _calculateReward(lPrevPrice, lNewPrice, lRewardThreshold);
             }

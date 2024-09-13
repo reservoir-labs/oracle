@@ -705,7 +705,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         skip(_oracle.twapPeriod());
 
         lReward = _oracle.updatePrice(address(_tokenA), address(_tokenB), address(this));
-        assertGt(lReward, _oracle.rewardGasAmount() * 3); // ensure that rewards have accumulated
+        assertGt(lReward, _oracle.rewardGasAmount() * 3); // ensure that rewards have been aggregated across routes
     }
 
     function testSetRoute() public {
