@@ -170,6 +170,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
                 rTotalReward += _calculateReward(lPrevPrice, lNewPrice, lRewardThreshold);
             }
         }
+
         _rewardUpdater(aRewardRecipient, rTotalReward);
     }
 
