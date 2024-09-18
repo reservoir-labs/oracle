@@ -132,7 +132,13 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aTokenA Address of one of the tokens for the price update. Does not have to be less than address of aTokenB
     /// @param aTokenB Address of one of the tokens for the price update. Does not have to be greater than address of aTokenA
     /// @param aRewardRecipient The beneficiary of the reward. Must be able to receive ether. Set to address(0) if not seeking a reward
-    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient) external nonReentrant {
+    /// @return rTotalReward The total amount of ETH reward if the price was updated in the same call. Mainly used by keepers and MEV bots to simulate offchain if a price update is worth doing.
+    /// Does not take into account if there is sufficient ETH for rewards in the contract. Oracle could have insufficient ETH resulting in no rewards even if called.
+    function updatePrice(address aTokenA, address aTokenB, address aRewardRecipient)
+        external
+        nonReentrant
+        returns (uint256 rTotalReward)
+    {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
         (address[] memory lRoute,, uint256 lPrevPrice, uint256 lRewardThreshold) =
@@ -154,12 +160,18 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
             // if it's a simple route, we avoid loading the price again from storage
             if (lRoute.length != 2) {
-                (lPrevPrice,,) = _priceCache(lToken0, lToken1);
+                (lPrevPrice,, lRewardThreshold) = _priceCache(lToken0, lToken1);
             }
 
             _writePriceCache(lToken0, lToken1, lNewPrice);
-            _rewardUpdater(lPrevPrice, lNewPrice, aRewardRecipient, lRewardThreshold);
+            // SAFETY: This will not overflow even if reward gas amount is set to the block gas limit (30M at time if writing),
+            // and hops are limited by `MAX_ROUTE_LENGTH`.
+            unchecked {
+                rTotalReward += _calculateReward(lPrevPrice, lNewPrice, lRewardThreshold);
+            }
         }
+
+        _rewardUpdater(aRewardRecipient, rTotalReward);
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -182,11 +194,9 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         rResult = lPair.getTimeWeightedAverage(aQuery.priceType, aQuery.secs, aQuery.ago, lIndex);
     }
 
-    function _rewardUpdater(uint256 aPrevPrice, uint256 aNewPrice, address aRecipient, uint256 aRewardThreshold)
-        private
+    function _calculateReward(uint256 aPrevPrice, uint256 aNewPrice, uint256 aRewardThreshold)
+        private returns (uint256 rReward)
     {
-        if (aRecipient == address(0)) return;
-
         // SAFETY: this mul will not overflow as 0 < `aRewardThreshold` <= `Constants.BP_SCALE`, as checked by `setRoute`
         uint256 lRewardThresholdWAD;
         unchecked {
@@ -194,12 +204,11 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         }
 
         uint256 lPercentDiff = aPrevPrice.calcPercentageDiff(aNewPrice);
-        uint256 lPayoutAmt;
 
         // SAFETY: this mul will not overflow even in extreme cases of `block.basefee`.
         unchecked {
             if (lPercentDiff < lRewardThresholdWAD) {
-                return;
+                return 0;
             }
             // payout max reward
             else if (lPercentDiff >= lRewardThresholdWAD * MAX_REWARD_MULTIPLIER) {
@@ -209,18 +218,22 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
                 // on ARB because the latter will always return the demand insensitive
                 // base fee, while the former can return higher fees during times of
                 // congestion
-                lPayoutAmt = block.basefee * rewardGasAmount * MAX_REWARD_MULTIPLIER;
+                rReward = block.basefee * rewardGasAmount * MAX_REWARD_MULTIPLIER;
             } else {
                 assert(
                     lPercentDiff >= lRewardThresholdWAD && lPercentDiff < lRewardThresholdWAD * MAX_REWARD_MULTIPLIER
                 );
-                lPayoutAmt = block.basefee * rewardGasAmount * lPercentDiff / lRewardThresholdWAD; // denominator is never 0
+                rReward = block.basefee * rewardGasAmount * lPercentDiff / lRewardThresholdWAD; // denominator is never 0
             }
         }
+    }
+
+    function _rewardUpdater(address aRecipient, uint256 aReward) private {
+        if (aRecipient == address(0) || aReward == 0) return;
 
         // does not revert under any circumstance
         assembly ("memory-safe") {
-            pop(call(gas(), aRecipient, lPayoutAmt, codesize(), 0x00, codesize(), 0x00))
+            pop(call(gas(), aRecipient, aReward, codesize(), 0x00, codesize(), 0x00))
         }
     }
 
@@ -490,7 +503,9 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
             uint256 lRewardThreshold = aRewardThresholds[0];
-            if (lRewardThreshold > Constants.BP_SCALE || lRewardThreshold == 0) revert OracleErrors.InvalidRewardThreshold();
+            if (lRewardThreshold > Constants.BP_SCALE || lRewardThreshold == 0) {
+                revert OracleErrors.InvalidRewardThreshold();
+            }
 
             bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, lRewardThreshold);
             assembly ("memory-safe") {
