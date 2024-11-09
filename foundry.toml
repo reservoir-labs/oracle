@@ -1,5 +1,6 @@
 [profile.default]
 solc = "0.8.28"
+evm_version = "cancun"
 bytecode_hash = "ipfs"
 optimizer_runs = 1_000_000
 libs = ['lib']

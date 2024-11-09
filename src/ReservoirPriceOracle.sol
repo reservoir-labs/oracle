@@ -10,13 +10,13 @@ import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
 import { QueryProcessor, ReservoirPair, PriceType } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
-import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
+import { ReentrancyGuardTransient } from "lib/solady/src/utils/ReentrancyGuardTransient.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
 import { LibSort } from "lib/solady/src/utils/LibSort.sol";
 import { Constants } from "src/libraries/Constants.sol";
 import { RoutesLib } from "src/libraries/RoutesLib.sol";
 
-contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuard {
+contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuardTransient {
     using FixedPointMathLib for uint256;
     using LibSort for address[];
     using RoutesLib for bytes32;
