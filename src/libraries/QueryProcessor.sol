@@ -36,7 +36,7 @@ library QueryProcessor {
      */
     function getInstantValue(ReservoirPair pair, PriceType priceType, uint256 index) internal view returns (uint256) {
         Observation memory sample = pair.observation(index);
-        if (sample.timestamp == 0) revert OracleErrors.OracleNotInitialized();
+        require(sample.timestamp != 0, OracleErrors.OracleNotInitialized());
 
         int256 rawInstantValue = sample.instant(priceType);
         return LogCompression.fromLowResLog(rawInstantValue);
@@ -52,7 +52,7 @@ library QueryProcessor {
         uint256 ago,
         uint16 latestIndex
     ) internal view returns (uint256) {
-        if (secs == 0) revert OracleErrors.BadSecs();
+        require(secs != 0, OracleErrors.BadSecs());
 
         // SAFETY:
         //
@@ -91,7 +91,7 @@ library QueryProcessor {
     {
         // solhint-disable not-rely-on-time
         // `ago` must not be before the epoch.
-        if (block.timestamp < ago) revert OracleErrors.InvalidSeconds();
+        require(ago <= block.timestamp , OracleErrors.InvalidSeconds());
         uint256 lookUpTime;
         // SAFETY:
         //
@@ -104,7 +104,7 @@ library QueryProcessor {
         uint256 latestTimestamp = latestSample.timestamp;
 
         // The latest sample only has a non-zero timestamp if no data was ever processed and stored in the buffer.
-        if (latestTimestamp == 0) revert OracleErrors.OracleNotInitialized();
+        require(latestTimestamp != 0, OracleErrors.OracleNotInitialized());
 
         if (latestTimestamp <= lookUpTime) {
             // The accumulator at times ahead of the latest one are computed by extrapolating the latest data. This is
@@ -143,7 +143,7 @@ library QueryProcessor {
                 }
 
                 // Finally check that the look up time is not previous to the oldest timestamp.
-                if (oldestTimestamp > lookUpTime) revert OracleErrors.QueryTooOld();
+                require(lookUpTime >= oldestTimestamp, OracleErrors.QueryTooOld());
             }
 
             // Perform binary search to find nearest samples to the desired timestamp.
