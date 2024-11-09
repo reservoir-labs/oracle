@@ -10,7 +10,7 @@ import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
 import { QueryProcessor, ReservoirPair, PriceType } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
-import { ReentrancyGuardTransient } from "lib/solady/src/utils/ReentrancyGuardTransient.sol";
+import { ReentrancyGuardTransient } from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuardTransient.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
 import { LibSort } from "lib/solady/src/utils/LibSort.sol";
 import { Constants } from "src/libraries/Constants.sol";
