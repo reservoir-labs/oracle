@@ -195,7 +195,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     }
 
     function _calculateReward(uint256 aPrevPrice, uint256 aNewPrice, uint256 aRewardThreshold)
-        private returns (uint256 rReward)
+        private
+        returns (uint256 rReward)
     {
         // SAFETY: this mul will not overflow as 0 < `aRewardThreshold` <= `Constants.BP_SCALE`, as checked by `setRoute`
         uint256 lRewardThresholdWAD;
@@ -460,7 +461,10 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @notice Sets the pair to serve as price feed for a given route.
     function designatePair(address aTokenA, address aTokenB, ReservoirPair aPair) external onlyOwner {
         (aTokenA, aTokenB) = Utils.sortTokens(aTokenA, aTokenB);
-        require(aTokenA == address(aPair.token0()) && aTokenB == address(aPair.token1()), OracleErrors.IncorrectTokensDesignatePair());
+        require(
+            aTokenA == address(aPair.token0()) && aTokenB == address(aPair.token1()),
+            OracleErrors.IncorrectTokensDesignatePair()
+        );
 
         pairs[aTokenA][aTokenB] = aPair;
         emit DesignatePair(aTokenA, aTokenB, aPair);
@@ -500,7 +504,9 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
             uint256 lRewardThreshold = aRewardThresholds[0];
-            require(lRewardThreshold <= Constants.BP_SCALE && lRewardThreshold != 0, OracleErrors.InvalidRewardThreshold());
+            require(
+                lRewardThreshold <= Constants.BP_SCALE && lRewardThreshold != 0, OracleErrors.InvalidRewardThreshold()
+            );
 
             bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, lRewardThreshold);
             assembly ("memory-safe") {

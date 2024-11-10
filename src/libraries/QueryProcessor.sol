@@ -91,7 +91,7 @@ library QueryProcessor {
     {
         // solhint-disable not-rely-on-time
         // `ago` must not be before the epoch.
-        require(ago <= block.timestamp , OracleErrors.InvalidSeconds());
+        require(ago <= block.timestamp, OracleErrors.InvalidSeconds());
         uint256 lookUpTime;
         // SAFETY:
         //
