@@ -9,7 +9,9 @@ contract ReservoirPriceOracleIntegrationTest is Test {
         vm.selectFork(lForkId);
     }
 
-    function testBlockBaseFee() external view {
+    function testBlockBaseFee() external {
+        // skipping for now as we're targeting mainnet instead of arbitrum
+        vm.skip(true);
         // assert
         assertEq(block.basefee, 0.01 gwei);
     }
