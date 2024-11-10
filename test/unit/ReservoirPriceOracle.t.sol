@@ -692,7 +692,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         skip(_oracle.twapPeriod());
 
         // act
-        uint256 lSwapAmt =  1_000_000;
+        uint256 lSwapAmt = 1_000_000;
         _tokenA.mint(address(lAC), lSwapAmt * 10 ** _tokenA.decimals());
         lAC.swap(int256(lSwapAmt * 10 ** _tokenA.decimals()), true, address(this), "");
 

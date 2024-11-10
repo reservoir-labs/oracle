@@ -10,13 +10,13 @@ import { IPriceOracle } from "src/interfaces/IPriceOracle.sol";
 import { QueryProcessor, ReservoirPair, PriceType } from "src/libraries/QueryProcessor.sol";
 import { Utils } from "src/libraries/Utils.sol";
 import { Owned } from "lib/amm-core/lib/solmate/src/auth/Owned.sol";
-import { ReentrancyGuard } from "lib/amm-core/lib/solmate/src/utils/ReentrancyGuard.sol";
+import { ReentrancyGuardTransient } from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuardTransient.sol";
 import { FixedPointMathLib } from "lib/amm-core/lib/solady/src/utils/FixedPointMathLib.sol";
 import { LibSort } from "lib/solady/src/utils/LibSort.sol";
 import { Constants } from "src/libraries/Constants.sol";
 import { RoutesLib } from "src/libraries/RoutesLib.sol";
 
-contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuard {
+contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuardTransient {
     using FixedPointMathLib for uint256;
     using LibSort for address[];
     using RoutesLib for bytes32;
@@ -143,7 +143,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
         (address[] memory lRoute,, uint256 lPrevPrice, uint256 lRewardThreshold) =
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
-        if (lRoute.length == 0) revert OracleErrors.NoPath();
+        require(lRoute.length != 0, OracleErrors.NoPath());
 
         for (uint256 i = 0; i < lRoute.length - 1; ++i) {
             (lToken0, lToken1) = Utils.sortTokens(lRoute[i], lRoute[i + 1]);
@@ -179,11 +179,11 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
     function _validatePair(ReservoirPair aPair) private pure {
-        if (address(aPair) == address(0)) revert OracleErrors.NoDesignatedPair();
+        require(address(aPair) != address(0), OracleErrors.NoDesignatedPair());
     }
 
     function _validateTokens(address aToken0, address aToken1) private pure {
-        if (aToken1 <= aToken0) revert OracleErrors.InvalidTokensProvided();
+        require(aToken0 < aToken1, OracleErrors.InvalidTokensProvided());
     }
 
     function _getTimeWeightedAverageSingle(OracleAverageQuery memory aQuery) private view returns (uint256 rResult) {
@@ -195,7 +195,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     }
 
     function _calculateReward(uint256 aPrevPrice, uint256 aNewPrice, uint256 aRewardThreshold)
-        private returns (uint256 rReward)
+        private
+        returns (uint256 rReward)
     {
         // SAFETY: this mul will not overflow as 0 < `aRewardThreshold` <= `Constants.BP_SCALE`, as checked by `setRoute`
         uint256 lRewardThresholdWAD;
@@ -331,14 +332,14 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     }
 
     function _writePriceCache(address aToken0, address aToken1, uint256 aNewPrice) private {
-        if (aNewPrice == 0 || aNewPrice > Constants.MAX_SUPPORTED_PRICE) revert OracleErrors.PriceOutOfRange(aNewPrice);
+        require(aNewPrice != 0 && aNewPrice <= Constants.MAX_SUPPORTED_PRICE, OracleErrors.PriceOutOfRange(aNewPrice));
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
         bytes32 lData;
         assembly ("memory-safe") {
             lData := sload(lSlot)
         }
-        if (!lData.isSimplePrice()) revert OracleErrors.WriteToNonSimpleRoute();
+        require(lData.isSimplePrice(), OracleErrors.WriteToNonSimpleRoute());
 
         lData = RoutesLib.packSimplePrice(lData.getDecimalDifference(), aNewPrice, lData.getRewardThreshold());
         assembly ("memory-safe") {
@@ -352,7 +353,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         returns (uint256 rBidOut, uint256 rAskOut)
     {
         if (aBase == aQuote) return (aAmount, aAmount);
-        if (aAmount > Constants.MAX_AMOUNT_IN) revert OracleErrors.AmountInTooLarge();
+        require(aAmount <= Constants.MAX_AMOUNT_IN, OracleErrors.AmountInTooLarge());
 
         (address lToken0, address lToken1) = Utils.sortTokens(aBase, aQuote);
         (address[] memory lRoute, int256 lDecimalDiff, uint256 lPrice,) =
@@ -372,7 +373,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             // route does not exist on our oracle, attempt querying the fallback
             return _useFallbackOracle(aAmount, aBase, aQuote, aIsGetQuotes);
         } else if (lRoute.length == 2) {
-            if (lPrice == 0) revert OracleErrors.PriceZero();
+            require(lPrice != 0, OracleErrors.PriceZero());
             rBidOut = rAskOut = _calcAmtOut(aAmount, lPrice, lDecimalDiff, lRoute[0] != aBase);
         }
         // for composite route, read simple prices to derive composite price
@@ -388,7 +389,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
                 // it is assumed that intermediate routes defined here are simple routes and not composite routes
                 (lPrice, lDecimalDiff,) = _priceCache(lToken0, lToken1);
 
-                if (lPrice == 0) revert OracleErrors.PriceZero();
+                require(lPrice != 0, OracleErrors.PriceZero());
                 lIntermediateAmount = _calcAmtOut(lIntermediateAmount, lPrice, lDecimalDiff, lRoute[i] != lToken0);
             }
             rBidOut = rAskOut = lIntermediateAmount;
@@ -429,7 +430,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         view
         returns (uint256 rBidOut, uint256 rAskOut)
     {
-        if (fallbackOracle == address(0)) revert OracleErrors.NoPath();
+        require(fallbackOracle != address(0), OracleErrors.NoPath());
 
         // We do not catch errors here so the fallback oracle will revert if it doesn't support the query.
         if (aIsGetQuotes) (rBidOut, rAskOut) = IPriceOracle(fallbackOracle).getQuotes(aAmount, aBase, aQuote);
@@ -446,9 +447,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     }
 
     function updateTwapPeriod(uint64 aNewPeriod) public onlyOwner {
-        if (aNewPeriod == 0 || aNewPeriod > Constants.MAX_TWAP_PERIOD) {
-            revert OracleErrors.InvalidTwapPeriod();
-        }
+        require(aNewPeriod != 0 && aNewPeriod <= Constants.MAX_TWAP_PERIOD, OracleErrors.InvalidTwapPeriod());
+
         twapPeriod = aNewPeriod;
         emit TwapPeriod(aNewPeriod);
     }
@@ -461,9 +461,10 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @notice Sets the pair to serve as price feed for a given route.
     function designatePair(address aTokenA, address aTokenB, ReservoirPair aPair) external onlyOwner {
         (aTokenA, aTokenB) = Utils.sortTokens(aTokenA, aTokenB);
-        if (aTokenA != address(aPair.token0()) || aTokenB != address(aPair.token1())) {
-            revert OracleErrors.IncorrectTokensDesignatePair();
-        }
+        require(
+            aTokenA == address(aPair.token0()) && aTokenB == address(aPair.token1()),
+            OracleErrors.IncorrectTokensDesignatePair()
+        );
 
         pairs[aTokenA][aTokenB] = aPair;
         emit DesignatePair(aTokenA, aTokenB, aPair);
@@ -488,9 +489,9 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         uint256 lRouteLength = aRoute.length;
 
         _validateTokens(aToken0, aToken1);
-        if (lRouteLength > Constants.MAX_ROUTE_LENGTH || lRouteLength < 2) revert OracleErrors.InvalidRouteLength();
-        if (aRoute[0] != aToken0 || aRoute[lRouteLength - 1] != aToken1) revert OracleErrors.InvalidRoute();
-        if (aRewardThresholds.length != lRouteLength - 1) revert OracleErrors.InvalidArrayLengthRewardThresholds();
+        require(lRouteLength > 1 && lRouteLength <= Constants.MAX_ROUTE_LENGTH, OracleErrors.InvalidRouteLength());
+        require(aRoute[0] == aToken0 && aRoute[lRouteLength - 1] == aToken1, OracleErrors.InvalidRoute());
+        require(aRewardThresholds.length == lRouteLength - 1, OracleErrors.InvalidArrayLengthRewardThresholds());
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 
@@ -498,14 +499,14 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         if (lRouteLength == 2) {
             uint256 lToken0Decimals = IERC20(aToken0).decimals();
             uint256 lToken1Decimals = IERC20(aToken1).decimals();
-            if (lToken0Decimals > 18 || lToken1Decimals > 18) revert OracleErrors.UnsupportedTokenDecimals();
+            require(lToken0Decimals <= 18 && lToken1Decimals <= 18, OracleErrors.UnsupportedTokenDecimals());
 
             int256 lDiff = int256(lToken1Decimals) - int256(lToken0Decimals);
 
             uint256 lRewardThreshold = aRewardThresholds[0];
-            if (lRewardThreshold > Constants.BP_SCALE || lRewardThreshold == 0) {
-                revert OracleErrors.InvalidRewardThreshold();
-            }
+            require(
+                lRewardThreshold <= Constants.BP_SCALE && lRewardThreshold != 0, OracleErrors.InvalidRewardThreshold()
+            );
 
             bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, lRewardThreshold);
             assembly ("memory-safe") {
