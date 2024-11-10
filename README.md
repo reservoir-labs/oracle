@@ -19,6 +19,15 @@ For direct usages of the oracle, refer to
 [IReservoirPriceOracle.sol](src/interfaces/IReservoirPriceOracle.sol) for
 methods to obtain raw data from the AMM pairs.
 
+## EVM Compatibility
+
+Currently the `ReservoirPriceOracle` contract makes use of the transient storage
+supported since the Cancun fork via OZ's `ReentrancyGuardTransient` lib.
+At the time of writing only ETH mainnet is supported.
+If deployment to other chains where transient storage is not yet supported,
+we can revert to using solady's `ReentrancyGuard` for the most gas efficient
+implementation.
+
 ## Usage
 
 ### Install
