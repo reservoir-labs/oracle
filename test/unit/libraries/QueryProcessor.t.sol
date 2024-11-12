@@ -5,6 +5,7 @@ import { BaseTest, FactoryStoreLib, GenericFactory } from "test/__fixtures/BaseT
 
 import { Buffer, OracleErrors } from "src/libraries/QueryProcessor.sol";
 import { QueryProcessorWrapper, ReservoirPair, Observation, PriceType } from "test/wrapper/QueryProcessorWrapper.sol";
+import { console2 } from "forge-std/console2.sol";
 
 contract QueryProcessorTest is BaseTest {
     using FactoryStoreLib for GenericFactory;
@@ -179,7 +180,9 @@ contract QueryProcessorTest is BaseTest {
         uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
 
         // arrange
-        uint256 lStartTime = block.timestamp;
+        // the following two lines are a workaround to the via-ir bug when working with forge-std's time wrap. See https://github.com/foundry-rs/foundry/issues/1373
+        uint256 lStartTime = (block.timestamp << 1) >> 1;
+        console2.log(lStartTime);
         _fillBuffer(lBlockTime, lObservationsToWrite);
         (,,, uint16 lIndex) = _pair.getReserves();
 
