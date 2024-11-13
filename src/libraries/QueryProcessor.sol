@@ -21,10 +21,8 @@ import { OracleErrors } from "src/libraries/OracleErrors.sol";
 import { Samples, PriceType } from "src/libraries/Samples.sol";
 
 /**
- * @dev Auxiliary library for PoolPriceOracle, offloading most of the query code to reduce bytecode size by using this
- * as a linked library. The downside is an extra DELEGATECALL is added (2600 gas as of the Berlin hardfork), but the
- * bytecode size gains are so big (specially of the oracle contract does not use `LogCompression.fromLowResLog`) that
- * it is worth it.
+ * @dev Auxiliary library for ReservoirPriceOracle,
+ * forked from Balancer implementation at https://github.com/balancer/balancer-v2-monorepo/blob/903d34e491a5e9c5d59dabf512c7addf1ccf9bbd/pkg/pool-utils/contracts/oracle/QueryProcessor.sol
  */
 library QueryProcessor {
     using Buffer for uint16;
@@ -80,9 +78,8 @@ library QueryProcessor {
      * If requesting information for a timestamp later than the latest one, it is extrapolated using the latest
      * available data.
      *
-     * When no exact information is available for the requested past timestamp (as usually happens, since at most one
-     * timestamp is stored every two minutes), it is estimated by performing linear interpolation using the closest
-     * values. This process is guaranteed to complete performing at most 11 storage reads.
+     * When no exact information is available for the requested past timestamp, it is estimated by performing linear interpolation using the closest values.
+     * This process is guaranteed to complete performing at most log2(Buffer.SIZE) storage reads.
      */
     function getPastAccumulator(ReservoirPair pair, PriceType priceType, uint16 latestIndex, uint256 ago)
         internal
