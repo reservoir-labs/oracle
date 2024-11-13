@@ -238,9 +238,9 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         }
     }
 
-    /// @return rRoute The route to determine the price between aToken0 and aToken1
-    /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise
-    /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise
+    /// @return rRoute The route to determine the price between aToken0 and aToken1. Returns an empty array if there is no route.
+    /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise.
+    /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise.
     /// @return rRewardThreshold The number of basis points of difference in price at and beyond which a reward is applicable for a price update.
     function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
         private
@@ -292,8 +292,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         }
     }
 
-    /// Calculate the storage slot for this intermediate segment and read it to see if there is an existing
-    /// route. If there isn't an existing route, we write it as well.
+    // Calculate the storage slot for this intermediate segment and read it to see if there is an existing
+    // route. If there isn't an existing route, we create one as well.
     function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB, uint16 aBpMaxReward) private {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
