@@ -59,9 +59,9 @@
     "test:unit-large": "export FOUNDRY_PROFILE=large-test && forge test"
   },
   "devDependencies": {
-    "markdownlint": "0.34.0",
-    "markdownlint-cli": "0.31.1",
-    "prettier": "3.3.1",
+    "markdownlint": "0.36.1",
+    "markdownlint-cli": "0.42.0",
+    "prettier": "3.3.3",
     "solhint": "5.0.3",
     "ts-node": "10.8.1"
   }
