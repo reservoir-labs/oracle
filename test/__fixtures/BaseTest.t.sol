@@ -48,6 +48,7 @@ contract BaseTest is Test {
         _factory.write("Shared::recoverer", address(this));
         _factory.write("Shared::maxChangeRate", Constants.DEFAULT_MAX_CHANGE_RATE);
         _factory.write("Shared::oracleCaller", address(_oracle));
+        _factory.write("Shared::maxChangePerTrade", Constants.DEFAULT_MAX_CHANGE_PER_TRADE);
 
         _pair = ReservoirPair(_createPair(address(_tokenA), address(_tokenB), 0));
         _tokenA.mint(address(_pair), 103e6);

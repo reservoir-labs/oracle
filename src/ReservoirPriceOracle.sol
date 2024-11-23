@@ -196,6 +196,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     function _calculateReward(uint256 aPrevPrice, uint256 aNewPrice, uint256 aRewardThreshold)
         private
+        view
         returns (uint256 rReward)
     {
         // SAFETY: this mul will not overflow as 0 < `aRewardThreshold` <= `Constants.BP_SCALE`, as checked by `setRoute`
