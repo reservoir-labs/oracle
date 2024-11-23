@@ -77,6 +77,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         _addressSet.add(address(_oracle));
         _addressSet.add(address(_pair));
         _addressSet.add(address(this));
+        _addressSet.add(address(VM_ADDRESS));
     }
 
     // solhint-disable-next-line no-empty-blocks
