@@ -11,6 +11,7 @@ import {
     OracleAverageQuery,
     ReservoirPriceOracle,
     IERC20,
+    IERC4626,
     IPriceOracle,
     RoutesLib
 } from "src/ReservoirPriceOracle.sol";
@@ -19,6 +20,7 @@ import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
 import { Constants } from "src/libraries/Constants.sol";
 import { MockFallbackOracle } from "test/mock/MockFallbackOracle.sol";
 import { StubERC4626 } from "test/mock/StubERC4626.sol";
+import {Errors} from "../../lib/amm-core/test/integration/AaveErrors.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
@@ -93,6 +95,11 @@ contract ReservoirPriceOracleTest is BaseTest {
 
         _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
         _oracle.setRoute(address(_tokenA), address(_tokenB), lRoute, lRewardThreshold);
+    }
+
+    function testName() external {
+        // act & assert
+        assertEq(_oracle.name(), "RESERVOIR PRICE ORACLE");
     }
 
     function testWritePriceCache(uint256 aPrice) external {
@@ -976,6 +983,11 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updatePrice(address(_tokenB), address(_tokenC), address(0));
     }
 
+    function testUpdatePrice_NoPath() external {
+        vm.expectRevert(OracleErrors.NoPath.selector);
+        _oracle.updatePrice(address(_tokenD), address(_tokenC), address(0));
+    }
+
     function testSetRoute_SameToken() external {
         // arrange
         address lToken0 = address(0x1);
@@ -1107,5 +1119,29 @@ contract ReservoirPriceOracleTest is BaseTest {
         // act & assert
         vm.expectRevert(OracleErrors.AmountInTooLarge.selector);
         _oracle.getQuote(lAmtIn, address(_tokenA), address(_tokenB));
+    }
+
+    function testGetQuote_ERC4626AssetFails() external {
+        // arrange
+        address lTargetContract = address(_tokenA); // just any address that doesn't impl the `asset()` function
+
+        // act & assert - the target should be called but should not fail despite not having the function. It should only fail when attempting to query the fallback
+        vm.expectCall(lTargetContract, abi.encodeCall(IERC4626.asset, ()));
+        vm.expectRevert(OracleErrors.NoPath.selector);
+        _oracle.getQuote(123, lTargetContract, address(_tokenD));
+    }
+
+    function testValidatePair_NoDesignatedPair() external {
+        // arrange
+        skip(1);
+        _pair.sync();
+        skip(_oracle.twapPeriod());
+        _pair.sync();
+
+        _oracle.undesignatePair(address(_tokenA), address(_tokenB));
+
+        // act & assert
+        vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
+        _oracle.updatePrice(address(_tokenA), address(_tokenB), address(this));
     }
 }
