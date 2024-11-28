@@ -1083,6 +1083,37 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.setRoute(lRoute[0], lRoute[1], lRoute, lInvalidRewardThreshold);
     }
 
+    function testSetRoute_InvalidRewardThresholdLength() external {
+        address[] memory lRoute = new address[](2);
+        uint16[] memory lRewardThreshold = new uint16[](2);
+        lRewardThreshold[0] = Constants.BP_SCALE;
+        lRoute[0] = address(_tokenC);
+        lRoute[1] = address(_tokenD);
+
+        // act & assert
+        vm.expectRevert(OracleErrors.InvalidRewardThresholdsLength.selector);
+        _oracle.setRoute(address(_tokenC), address(_tokenD), lRoute, lRewardThreshold);
+    }
+
+    function testSetRoute_InvalidDecimals() external {
+        // arrange
+        MintableERC20 lToken = new MintableERC20("AA", "AA", 21);
+        address[] memory lRoute = new address[](2);
+        lRoute[0] = address(lToken) < address(_tokenA) ? address(lToken) : address(_tokenA);
+        lRoute[1] = address(lToken) < address(_tokenA) ? address(_tokenA) : address(lToken);
+        uint16[] memory lRewardThreshold = new uint16[](1);
+        lRewardThreshold[0] = Constants.BP_SCALE;
+
+        // act & assert
+        vm.expectRevert(OracleErrors.UnsupportedTokenDecimals.selector);
+        _oracle.setRoute(
+            address(lToken) < address(_tokenA) ? address(lToken) : address(_tokenA),
+            address(lToken) < address(_tokenA) ? address(_tokenA) : address(lToken),
+            lRoute,
+            lRewardThreshold
+        );
+    }
+
     function testUpdateRewardGasAmount_NotOwner() external {
         // act & assert
         vm.prank(address(123));

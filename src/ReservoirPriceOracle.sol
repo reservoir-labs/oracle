@@ -492,7 +492,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         _validateTokens(aToken0, aToken1);
         require(lRouteLength > 1 && lRouteLength <= Constants.MAX_ROUTE_LENGTH, OracleErrors.InvalidRouteLength());
         require(aRoute[0] == aToken0 && aRoute[lRouteLength - 1] == aToken1, OracleErrors.InvalidRoute());
-        require(aRewardThresholds.length == lRouteLength - 1, OracleErrors.InvalidArrayLengthRewardThresholds());
+        require(aRewardThresholds.length == lRouteLength - 1, OracleErrors.InvalidRewardThresholdsLength());
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
 

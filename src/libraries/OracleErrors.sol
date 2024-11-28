@@ -6,7 +6,7 @@ library OracleErrors {
     // config errors
     error IncorrectTokensDesignatePair();
     error InvalidRewardThreshold();
-    error InvalidArrayLengthRewardThresholds();
+    error InvalidRewardThresholdsLength();
     error InvalidRoute();
     error InvalidRouteLength();
     error InvalidTokensProvided();
