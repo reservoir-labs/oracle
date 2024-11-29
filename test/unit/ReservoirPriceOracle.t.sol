@@ -658,29 +658,23 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.setRoute(lStart, lEnd, lRoute, lRewardThreshold);
 
         ReservoirPair lAC = ReservoirPair(_createPair(address(_tokenA), address(_tokenC), 0));
-        ReservoirPair lCD = ReservoirPair(_createPair(address(_tokenC), address(_tokenD), 0));
         ReservoirPair lBD = ReservoirPair(_createPair(address(_tokenB), address(_tokenD), 0));
 
         _tokenA.mint(address(lAC), 200 * 10 ** _tokenA.decimals());
         _tokenC.mint(address(lAC), 100 * 10 ** _tokenC.decimals());
         lAC.mint(address(this));
 
-        _tokenC.mint(address(lCD), 100 * 10 ** _tokenC.decimals());
-        _tokenD.mint(address(lCD), 200 * 10 ** _tokenD.decimals());
-        lCD.mint(address(this));
-
         _tokenB.mint(address(lBD), 100 * 10 ** _tokenB.decimals());
         _tokenD.mint(address(lBD), 200 * 10 ** _tokenD.decimals());
         lBD.mint(address(this));
 
         _oracle.designatePair(lStart, lIntermediate1, lAC);
-        _oracle.designatePair(lIntermediate2, lIntermediate1, lCD);
         _oracle.designatePair(lIntermediate2, lEnd, lBD);
 
         skip(1);
         _pair.sync();
         lAC.sync();
-        lCD.sync();
+        _pairCD.sync();
         lBD.sync();
         skip(_oracle.twapPeriod());
 
@@ -706,8 +700,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         _tokenA.mint(address(lAC), lSwapAmt * 10 ** _tokenA.decimals());
         lAC.swap(int256(lSwapAmt * 10 ** _tokenA.decimals()), true, address(this), "");
 
-        _tokenC.mint(address(lCD), lSwapAmt * 10 ** _tokenC.decimals());
-        lCD.swap(int256(lSwapAmt * 10 ** _tokenC.decimals()), true, address(this), "");
+        _tokenC.mint(address(_pairCD), lSwapAmt * 10 ** _tokenC.decimals());
+        _pairCD.swap(int256(lSwapAmt * 10 ** _tokenC.decimals()), true, address(this), "");
 
         _tokenB.mint(address(lBD), lSwapAmt * 10 ** _tokenB.decimals());
         lBD.swap(int256(lSwapAmt * 10 ** _tokenB.decimals()), true, address(this), "");

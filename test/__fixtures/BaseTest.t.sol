@@ -57,14 +57,14 @@ contract BaseTest is Test {
         _tokenB.mint(address(_pair), 10_189e18);
         _pair.mint(address(this));
 
-        _pairBC = ReservoirPair(_createPair(address(_tokenB), address(_tokenC), 0));
+        _pairBC = ReservoirPair(_createPair(address(_tokenB), address(_tokenC), 1));
         _tokenB.mint(address(_pairBC), 102_303e18);
         _tokenC.mint(address(_pairBC), 292e10);
         _pairBC.mint(address(this));
 
         _pairCD = ReservoirPair(_createPair(address(_tokenC), address(_tokenD), 0));
-        _tokenC.mint(address(_pairCD), 991_102_221e10);
-        _tokenD.mint(address(_pairCD), 937_991_222e6);
+        _tokenC.mint(address(_pairCD), 100 * 10 ** _tokenC.decimals());
+        _tokenD.mint(address(_pairCD), 200 * 10 ** _tokenD.decimals());
         _pairCD.mint(address(this));
     }
 
