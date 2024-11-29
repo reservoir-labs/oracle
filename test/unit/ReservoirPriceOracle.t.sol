@@ -11,6 +11,7 @@ import {
     OracleAverageQuery,
     ReservoirPriceOracle,
     IERC20,
+    IERC4626,
     IPriceOracle,
     RoutesLib
 } from "src/ReservoirPriceOracle.sol";
@@ -19,6 +20,7 @@ import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
 import { Constants } from "src/libraries/Constants.sol";
 import { MockFallbackOracle } from "test/mock/MockFallbackOracle.sol";
 import { StubERC4626 } from "test/mock/StubERC4626.sol";
+import {Errors} from "../../lib/amm-core/test/integration/AaveErrors.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
@@ -92,7 +94,14 @@ contract ReservoirPriceOracleTest is BaseTest {
         lRewardThreshold[0] = 200; // 2%
 
         _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
+        _oracle.designatePair(address(_tokenB), address(_tokenC), _pairBC);
+        _oracle.designatePair(address(_tokenD), address(_tokenC), _pairCD);
         _oracle.setRoute(address(_tokenA), address(_tokenB), lRoute, lRewardThreshold);
+    }
+
+    function testName() external {
+        // act & assert
+        assertEq(_oracle.name(), "RESERVOIR PRICE ORACLE");
     }
 
     function testWritePriceCache(uint256 aPrice) external {
@@ -649,29 +658,23 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.setRoute(lStart, lEnd, lRoute, lRewardThreshold);
 
         ReservoirPair lAC = ReservoirPair(_createPair(address(_tokenA), address(_tokenC), 0));
-        ReservoirPair lCD = ReservoirPair(_createPair(address(_tokenC), address(_tokenD), 0));
         ReservoirPair lBD = ReservoirPair(_createPair(address(_tokenB), address(_tokenD), 0));
 
         _tokenA.mint(address(lAC), 200 * 10 ** _tokenA.decimals());
         _tokenC.mint(address(lAC), 100 * 10 ** _tokenC.decimals());
         lAC.mint(address(this));
 
-        _tokenC.mint(address(lCD), 100 * 10 ** _tokenC.decimals());
-        _tokenD.mint(address(lCD), 200 * 10 ** _tokenD.decimals());
-        lCD.mint(address(this));
-
         _tokenB.mint(address(lBD), 100 * 10 ** _tokenB.decimals());
         _tokenD.mint(address(lBD), 200 * 10 ** _tokenD.decimals());
         lBD.mint(address(this));
 
         _oracle.designatePair(lStart, lIntermediate1, lAC);
-        _oracle.designatePair(lIntermediate2, lIntermediate1, lCD);
         _oracle.designatePair(lIntermediate2, lEnd, lBD);
 
         skip(1);
         _pair.sync();
         lAC.sync();
-        lCD.sync();
+        _pairCD.sync();
         lBD.sync();
         skip(_oracle.twapPeriod());
 
@@ -697,8 +700,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         _tokenA.mint(address(lAC), lSwapAmt * 10 ** _tokenA.decimals());
         lAC.swap(int256(lSwapAmt * 10 ** _tokenA.decimals()), true, address(this), "");
 
-        _tokenC.mint(address(lCD), lSwapAmt * 10 ** _tokenC.decimals());
-        lCD.swap(int256(lSwapAmt * 10 ** _tokenC.decimals()), true, address(this), "");
+        _tokenC.mint(address(_pairCD), lSwapAmt * 10 ** _tokenC.decimals());
+        _pairCD.swap(int256(lSwapAmt * 10 ** _tokenC.decimals()), true, address(this), "");
 
         _tokenB.mint(address(lBD), lSwapAmt * 10 ** _tokenB.decimals());
         lBD.swap(int256(lSwapAmt * 10 ** _tokenB.decimals()), true, address(this), "");
@@ -976,6 +979,43 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.updatePrice(address(_tokenB), address(_tokenC), address(0));
     }
 
+    function testUpdatePrice_WriteToNonSimpleRoute() external {
+        // arrange
+        uint16[] memory lRewardThresholds = new uint16[](2);
+        lRewardThresholds[0] = lRewardThresholds[1] = 1;
+        address[] memory lRoute = new address[](3);
+        lRoute[0] = address(_tokenA);
+        lRoute[1] = address(_tokenB);
+        lRoute[2] = address(_tokenC);
+
+        _oracle.setRoute(address(_tokenA), address(_tokenC), lRoute, lRewardThresholds);
+
+        // then we change the original B->C route with B->D->C
+        address[] memory lModifiedRoute = new address[](3);
+        lModifiedRoute[0] = address(_tokenB);
+        lModifiedRoute[1] = address(_tokenD);
+        lModifiedRoute[2] = address(_tokenC);
+        _oracle.setRoute(address(_tokenB), address(_tokenC), lModifiedRoute, lRewardThresholds);
+
+        skip(10);
+        _pair.sync();
+        _pairBC.sync();
+        _pairCD.sync();
+        skip(_oracle.twapPeriod());
+        _pair.sync();
+        _pairBC.sync();
+        _pairCD.sync();
+
+        // act & assert
+        vm.expectRevert(OracleErrors.WriteToNonSimpleRoute.selector);
+        _oracle.updatePrice(address(_tokenA), address(_tokenC), address(0));
+    }
+
+    function testUpdatePrice_NoPath() external {
+        vm.expectRevert(OracleErrors.NoPath.selector);
+        _oracle.updatePrice(address(_tokenD), address(_tokenC), address(0));
+    }
+
     function testSetRoute_SameToken() external {
         // arrange
         address lToken0 = address(0x1);
@@ -1071,6 +1111,37 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.setRoute(lRoute[0], lRoute[1], lRoute, lInvalidRewardThreshold);
     }
 
+    function testSetRoute_InvalidRewardThresholdLength() external {
+        address[] memory lRoute = new address[](2);
+        uint16[] memory lRewardThreshold = new uint16[](2);
+        lRewardThreshold[0] = Constants.BP_SCALE;
+        lRoute[0] = address(_tokenC);
+        lRoute[1] = address(_tokenD);
+
+        // act & assert
+        vm.expectRevert(OracleErrors.InvalidRewardThresholdsLength.selector);
+        _oracle.setRoute(address(_tokenC), address(_tokenD), lRoute, lRewardThreshold);
+    }
+
+    function testSetRoute_InvalidDecimals() external {
+        // arrange
+        MintableERC20 lToken = new MintableERC20("AA", "AA", 21);
+        address[] memory lRoute = new address[](2);
+        lRoute[0] = address(lToken) < address(_tokenA) ? address(lToken) : address(_tokenA);
+        lRoute[1] = address(lToken) < address(_tokenA) ? address(_tokenA) : address(lToken);
+        uint16[] memory lRewardThreshold = new uint16[](1);
+        lRewardThreshold[0] = Constants.BP_SCALE;
+
+        // act & assert
+        vm.expectRevert(OracleErrors.UnsupportedTokenDecimals.selector);
+        _oracle.setRoute(
+            address(lToken) < address(_tokenA) ? address(lToken) : address(_tokenA),
+            address(lToken) < address(_tokenA) ? address(_tokenA) : address(lToken),
+            lRoute,
+            lRewardThreshold
+        );
+    }
+
     function testUpdateRewardGasAmount_NotOwner() external {
         // act & assert
         vm.prank(address(123));
@@ -1107,5 +1178,29 @@ contract ReservoirPriceOracleTest is BaseTest {
         // act & assert
         vm.expectRevert(OracleErrors.AmountInTooLarge.selector);
         _oracle.getQuote(lAmtIn, address(_tokenA), address(_tokenB));
+    }
+
+    function testGetQuote_ERC4626AssetFails() external {
+        // arrange
+        address lTargetContract = address(_tokenA); // just any address that doesn't impl the `asset()` function
+
+        // act & assert - the target should be called but should not fail despite not having the function. It should only fail when attempting to query the fallback
+        vm.expectCall(lTargetContract, abi.encodeCall(IERC4626.asset, ()));
+        vm.expectRevert(OracleErrors.NoPath.selector);
+        _oracle.getQuote(123, lTargetContract, address(_tokenD));
+    }
+
+    function testValidatePair_NoDesignatedPair() external {
+        // arrange
+        skip(1);
+        _pair.sync();
+        skip(_oracle.twapPeriod());
+        _pair.sync();
+
+        _oracle.undesignatePair(address(_tokenA), address(_tokenB));
+
+        // act & assert
+        vm.expectRevert(OracleErrors.NoDesignatedPair.selector);
+        _oracle.updatePrice(address(_tokenA), address(_tokenB), address(this));
     }
 }
