@@ -71,6 +71,7 @@ jobs:
 
   coverage:
     needs: [test-unit]
+    if: false # skip this job for now as it always makes the github CI timeout
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

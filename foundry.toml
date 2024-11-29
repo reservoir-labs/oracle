@@ -19,10 +19,6 @@ skip = ["test/large/*.sol"]
 [profile.default.fuzz]
 seed = "0xe9cdc8fb2a2c0d1c046034d74d6498826ae3f1d9877353cf40d8a6a7aedfe875"
 
-[profile.coverage]
-optimizer = true
-optimizer_runs = 1_000_000
-
 [profile.large-test]
 via_ir = true
 match_path = "test/large/*.sol"
