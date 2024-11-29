@@ -21,6 +21,8 @@ contract BaseTest is Test {
 
     GenericFactory internal _factory = new GenericFactory();
     ReservoirPair internal _pair;
+    ReservoirPair internal _pairBC;
+    ReservoirPair internal _pairCD;
 
     ReservoirPriceOracle internal _oracle =
         new ReservoirPriceOracle(DEFAULT_TWAP_PERIOD, DEFAULT_REWARD_GAS_AMOUNT, PriceType.CLAMPED_PRICE);
@@ -54,6 +56,16 @@ contract BaseTest is Test {
         _tokenA.mint(address(_pair), 103e6);
         _tokenB.mint(address(_pair), 10_189e18);
         _pair.mint(address(this));
+
+        _pairBC = ReservoirPair(_createPair(address(_tokenB), address(_tokenC), 0));
+        _tokenB.mint(address(_pairBC), 102_303e18);
+        _tokenC.mint(address(_pairBC), 292e10);
+        _pairBC.mint(address(this));
+
+        _pairCD = ReservoirPair(_createPair(address(_tokenC), address(_tokenD), 0));
+        _tokenC.mint(address(_pairCD), 991_102_221e10);
+        _tokenD.mint(address(_pairCD), 937_991_222e6);
+        _pairCD.mint(address(this));
     }
 
     function _createPair(address aTokenA, address aTokenB, uint256 aCurveId) internal returns (address rPair) {

@@ -94,6 +94,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         lRewardThreshold[0] = 200; // 2%
 
         _oracle.designatePair(address(_tokenB), address(_tokenA), _pair);
+        _oracle.designatePair(address(_tokenB), address(_tokenC), _pairBC);
+        _oracle.designatePair(address(_tokenD), address(_tokenC), _pairCD);
         _oracle.setRoute(address(_tokenA), address(_tokenB), lRoute, lRewardThreshold);
     }
 
@@ -981,6 +983,38 @@ contract ReservoirPriceOracleTest is BaseTest {
             )
         );
         _oracle.updatePrice(address(_tokenB), address(_tokenC), address(0));
+    }
+
+    function testUpdatePrice_WriteToNonSimpleRoute() external {
+        // arrange
+        uint16[] memory lRewardThresholds = new uint16[](2);
+        lRewardThresholds[0] = lRewardThresholds[1] = 1;
+        address[] memory lRoute = new address[](3);
+        lRoute[0] = address(_tokenA);
+        lRoute[1] = address(_tokenB);
+        lRoute[2] = address(_tokenC);
+
+        _oracle.setRoute(address(_tokenA), address(_tokenC), lRoute, lRewardThresholds);
+
+        // then we change the original B->C route with B->D->C
+        address[] memory lModifiedRoute = new address[](3);
+        lModifiedRoute[0] = address(_tokenB);
+        lModifiedRoute[1] = address(_tokenD);
+        lModifiedRoute[2] = address(_tokenC);
+        _oracle.setRoute(address(_tokenB), address(_tokenC), lModifiedRoute, lRewardThresholds);
+
+        skip(10);
+        _pair.sync();
+        _pairBC.sync();
+        _pairCD.sync();
+        skip(_oracle.twapPeriod());
+        _pair.sync();
+        _pairBC.sync();
+        _pairCD.sync();
+
+        // act & assert
+        vm.expectRevert(OracleErrors.WriteToNonSimpleRoute.selector);
+        _oracle.updatePrice(address(_tokenA), address(_tokenC), address(0));
     }
 
     function testUpdatePrice_NoPath() external {
