@@ -230,9 +230,6 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
                 // congestion
                 rReward = block.basefee * rewardGasAmount * MAX_REWARD_MULTIPLIER;
             } else {
-                assert(
-                    lPercentDiff >= lRewardThresholdWAD && lPercentDiff < lRewardThresholdWAD * MAX_REWARD_MULTIPLIER
-                );
                 rReward = block.basefee * rewardGasAmount * lPercentDiff / lRewardThresholdWAD; // denominator is never 0
             }
         }
