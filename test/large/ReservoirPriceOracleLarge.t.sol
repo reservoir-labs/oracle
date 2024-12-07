@@ -31,12 +31,8 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
     ) external {
         // assume
         vm.assume(
-            aTokenAAddress > ADDRESS_THRESHOLD && aTokenBAddress > ADDRESS_THRESHOLD
-                && aTokenCAddress > ADDRESS_THRESHOLD && aTokenDAddress > ADDRESS_THRESHOLD
-        );
-        vm.assume(
-            _addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress) && _addressSet.add(aTokenCAddress)
-                && _addressSet.add(aTokenDAddress)
+            aTokenAAddress.code.length == 0 && aTokenBAddress.code.length == 0 && aTokenCAddress.code.length == 0
+                && aTokenCAddress.code.length == 0
         );
         uint256 lPrice1 = bound(aPrice1, 1e12, 1e24);
         uint256 lPrice2 = bound(aPrice2, 1e12, 1e24);

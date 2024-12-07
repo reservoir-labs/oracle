@@ -20,7 +20,6 @@ import { EnumerableSetLib } from "lib/solady/src/utils/EnumerableSetLib.sol";
 import { Constants } from "src/libraries/Constants.sol";
 import { MockFallbackOracle } from "test/mock/MockFallbackOracle.sol";
 import { StubERC4626 } from "test/mock/StubERC4626.sol";
-import {Errors} from "../../lib/amm-core/test/integration/AaveErrors.sol";
 
 contract ReservoirPriceOracleTest is BaseTest {
     using Utils for *;
@@ -260,8 +259,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint8 aTokenBDecimal
     ) external {
         // assume
-        vm.assume(aTokenAAddress > ADDRESS_THRESHOLD && aTokenBAddress > ADDRESS_THRESHOLD); // avoid precompile addresses
-        vm.assume(_addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress));
+        vm.assume(aTokenAAddress.code.length == 0 && aTokenBAddress.code.length == 0);
         uint256 lPrice = bound(aPrice, 1, 1e36);
         uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
         uint256 lTokenADecimal = bound(aTokenADecimal, 0, 18);
@@ -307,11 +305,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint8 aTokenCDecimal
     ) external {
         // assume
-        vm.assume(
-            aTokenAAddress > ADDRESS_THRESHOLD && aTokenBAddress > ADDRESS_THRESHOLD
-                && aTokenCAddress > ADDRESS_THRESHOLD
-        );
-        vm.assume(_addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress) && _addressSet.add(aTokenCAddress));
+        vm.assume(aTokenAAddress.code.length == 0 && aTokenBAddress.code.length == 0 && aTokenCAddress.code.length == 0);
         uint256 lPrice1 = bound(aPrice1, 1e9, 1e25); // need to bound price within this range as a price below this will go to zero as during the mul and div of prices
         uint256 lPrice2 = bound(aPrice2, 1e9, 1e25);
         uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
@@ -518,11 +512,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testUpdatePrice_AboveThresholdBelowMaxReward(uint256 aPercentDiff) external {
         // assume
         (,, uint256 lRewardThreshold) = _oracle.priceCache(address(_tokenA), address(_tokenB));
-        uint256 lPercentDiff = bound(
-            aPercentDiff,
-            lRewardThreshold,
-            _oracle.MAX_REWARD_MULTIPLIER() * lRewardThreshold
-        );
+        uint256 lPercentDiff = bound(aPercentDiff, lRewardThreshold, _oracle.MAX_REWARD_MULTIPLIER() * lRewardThreshold);
 
         // arrange
         uint256 lCurrentPrice = 98_918_868_099_219_913_512;
