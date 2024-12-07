@@ -123,7 +123,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken1 Address of the higher token.
     /// @return rPrice The cached price of aToken0/aToken1 for simple routes. Returns 0 for prices of composite routes.
     /// @return rDecimalDiff The difference in decimals as defined by aToken1.decimals() - aToken0.decimals(). Only valid for simple routes.
-    /// @return rRewardThreshold The number of basis points of difference in price at and beyond which a reward is applicable for a price update.
+    /// @return rRewardThreshold The difference in price in WAD at and beyond which a reward is applicable for a price update.
     function priceCache(address aToken0, address aToken1)
         external
         view
@@ -242,7 +242,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @return rRoute The route to determine the price between aToken0 and aToken1. Returns an empty array if there is no route.
     /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise.
     /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise.
-    /// @return rRewardThreshold The number of basis points of difference in price at and beyond which a reward is applicable for a price update.
+    /// @return rRewardThreshold The difference in price in WAD at and beyond which a reward is applicable for a price update.
     function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
         private
         view
@@ -484,19 +484,26 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken0 Address of the lower token.
     /// @param aToken1 Address of the higher token.
     /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived.
-    /// @param aRewardThresholds Array of basis points at and beyond which a reward is applicable for a price update.
+    /// @param aRewardThresholds Array of reward thresholds in WAD and beyond which a reward is applicable for a price update.
     function setRoute(address aToken0, address aToken1, address[] memory aRoute, uint64[] memory aRewardThresholds)
         public
         onlyOwner
     {
-        uint256 lRouteLength = aRoute.length;
-
         _validateTokens(aToken0, aToken1);
+
+        uint256 lRouteLength = aRoute.length;
         require(lRouteLength > 1 && lRouteLength <= Constants.MAX_ROUTE_LENGTH, OracleErrors.InvalidRouteLength());
         require(aRoute[0] == aToken0 && aRoute[lRouteLength - 1] == aToken1, OracleErrors.InvalidRoute());
         require(aRewardThresholds.length == lRouteLength - 1, OracleErrors.InvalidRewardThresholdsLength());
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
+
+        bytes32 lSlotData;
+        assembly ("memory-safe") {
+            lSlotData := sload(lSlot)
+        }
+        // clear existing route first if there is one
+        if (lSlotData != 0) clearRoute(aToken0, aToken1);
 
         // simple route
         if (lRouteLength == 2) {
@@ -548,7 +555,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @notice Clears the defined route and the corresponding storage slots.
     /// @param aToken0 Address of the lower token.
     /// @param aToken1 Address of the higher token.
-    function clearRoute(address aToken0, address aToken1) external onlyOwner {
+    function clearRoute(address aToken0, address aToken1) public onlyOwner {
         _validateTokens(aToken0, aToken1);
 
         (address[] memory lRoute,,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
