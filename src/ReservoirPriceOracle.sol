@@ -48,17 +48,17 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
+    // The following 3 storage variables take up 1 storage slot.
+
     /// @notice The PriceOracle to call if this router is not configured for base/quote.
     /// @dev If `address(0)` then there is no fallback.
     address public fallbackOracle;
-
-    // The following 2 storage variables take up 1 storage slot.
 
     /// @notice This number is multiplied by the base fee to determine the reward for keepers.
     uint64 public rewardGasAmount;
 
     /// @notice TWAP period (in seconds) for querying the oracle.
-    uint64 public twapPeriod;
+    uint16 public twapPeriod;
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1.
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
@@ -67,7 +67,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     //                                CONSTRUCTOR, FALLBACKS                                     //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    constructor(uint64 aTwapPeriod, uint64 aMultiplier, PriceType aType) {
+    constructor(uint16 aTwapPeriod, uint64 aMultiplier, PriceType aType) {
         updateTwapPeriod(aTwapPeriod);
         updateRewardGasAmount(aMultiplier);
         PRICE_TYPE = aType;
@@ -452,7 +452,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         emit FallbackOracleSet(aFallbackOracle);
     }
 
-    function updateTwapPeriod(uint64 aNewPeriod) public onlyOwner {
+    function updateTwapPeriod(uint16 aNewPeriod) public onlyOwner {
         require(aNewPeriod != 0 && aNewPeriod <= Constants.MAX_TWAP_PERIOD, OracleErrors.InvalidTwapPeriod());
 
         twapPeriod = aNewPeriod;

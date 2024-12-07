@@ -17,7 +17,7 @@ contract BaseTest is Test {
     using FactoryStoreLib for GenericFactory;
 
     uint64 internal constant DEFAULT_REWARD_GAS_AMOUNT = 200_000;
-    uint64 internal constant DEFAULT_TWAP_PERIOD = 15 minutes;
+    uint16 internal constant DEFAULT_TWAP_PERIOD = 15 minutes;
 
     GenericFactory internal _factory = new GenericFactory();
     ReservoirPair internal _pair;

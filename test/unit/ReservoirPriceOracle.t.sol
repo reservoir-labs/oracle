@@ -445,7 +445,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testUpdateTwapPeriod(uint256 aNewPeriod) external {
         // assume
-        uint64 lNewPeriod = uint64(bound(aNewPeriod, 1, 1 hours));
+        uint16 lNewPeriod = uint16(bound(aNewPeriod, 1, 1 hours));
 
         // act
         _oracle.updateTwapPeriod(lNewPeriod);
@@ -939,7 +939,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testUpdateTwapPeriod_InvalidTwapPeriod(uint256 aNewPeriod) external {
         // assume
-        uint64 lNewPeriod = uint64(bound(aNewPeriod, 1 hours + 1, type(uint64).max));
+        uint16 lNewPeriod = uint16(bound(aNewPeriod, 1 hours + 1, type(uint16).max));
 
         // act & assert
         vm.expectRevert(OracleErrors.InvalidTwapPeriod.selector);
