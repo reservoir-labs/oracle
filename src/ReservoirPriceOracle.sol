@@ -361,10 +361,12 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
         if (lRoute.length == 0) {
-            // There is one case where the behavior is a bit more unexpected, and that is when
-            // `aBase` is an empty contract, and the revert would not be caught at all, causing
-            // the entire operation to fail. But this is okay, because if `aBase` is not a contract, trying
-            // to use the fallbackOracle would not yield any results anyway.
+            // There are two cases where the behavior is a bit more unexpected, and that is when:
+            // (1) `aBase` is an empty contract, and the revert would not be caught at all, causing
+            // the entire operation to fail.
+            // (2) an error happens when decoding the return data (specifically the return data length)
+            // But this is okay, because if `aBase` is not a contract or tries to return different types,
+            // trying to use the fallbackOracle would not yield any results anyway.
             // An alternative would be to use a low level `staticcall`.
             try IERC4626(aBase).asset() returns (address rBaseAsset) {
                 uint256 lResolvedAmountIn = IERC4626(aBase).convertToAssets(aAmount);
