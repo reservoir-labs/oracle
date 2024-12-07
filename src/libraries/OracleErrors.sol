@@ -12,7 +12,6 @@ library OracleErrors {
     error InvalidTokensProvided();
     error InvalidTwapPeriod();
     error NoDesignatedPair();
-    error PriceDeviationThresholdTooHigh();
     error UnsupportedTokenDecimals();
 
     // query errors
