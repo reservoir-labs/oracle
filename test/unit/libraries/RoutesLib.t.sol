@@ -38,7 +38,7 @@ contract RoutesLibTest is Test {
 
     function testPackSimplePrice(int8 aDiff, uint256 aPrice) external pure {
         // assume
-        uint256 lPrice = bound(aPrice, 1, 1e36);
+        uint256 lPrice = bound(aPrice, 1, Constants.MAX_SUPPORTED_PRICE);
 
         // act
         bytes32 lResult = int256(aDiff).packSimplePrice(lPrice, Constants.BP_SCALE);
