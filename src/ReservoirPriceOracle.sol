@@ -83,6 +83,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     // IPriceOracle
 
+    /// @inheritdoc IPriceOracle
     function name() external pure returns (string memory) {
         return "RESERVOIR PRICE ORACLE";
     }
@@ -103,6 +104,13 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     // price update related functions
 
+    /// @notice Returns the defined route between a given pair of tokens if there is one.
+    /// @param aToken0 Address of the lower token.
+    /// @param aToken1 Address of the higher token.
+    /// @return rRoute An array containing the tokens that make up the route.
+    /// Contains two elements if it is a simple route (A->B),
+    /// Contains three elements if it is a 2 hop route (A->B->C) and so on.
+    /// Returns an empty array if there is no route, or if the arg tokens are not sorted.
     function route(address aToken0, address aToken1) external view returns (address[] memory rRoute) {
         (rRoute,,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
     }
@@ -543,6 +551,9 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         emit Route(aToken0, aToken1, aRoute);
     }
 
+    /// @notice Clears the defined route and the corresponding storage slots.
+    /// @param aToken0 Address of the lower token.
+    /// @param aToken1 Address of the higher token.
     function clearRoute(address aToken0, address aToken1) external onlyOwner {
         _validateTokens(aToken0, aToken1);
 
