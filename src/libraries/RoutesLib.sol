@@ -29,14 +29,14 @@ library RoutesLib {
 
     // Assumes that aDecimalDifference is between -18 and 18
     // Assumes that aPrice is between 1 and `Constants.MAX_SUPPORTED_PRICE`
-    // Assumes that aRewardThreshold is <= `Constants.BP_SCALE`
+    // Assumes that aRewardThreshold is between 1 and `Constants.WAD`
     function packSimplePrice(int256 aDecimalDifference, uint256 aPrice, uint256 aRewardThreshold)
         internal
         pure
         returns (bytes32 rPacked)
     {
         bytes32 lDecimalDifferenceRaw = bytes1(uint8(int8(aDecimalDifference)));
-        bytes32 lRewardThreshold = bytes2(uint16(aRewardThreshold));
+        bytes32 lRewardThreshold = bytes8(uint64(aRewardThreshold));
         rPacked = FLAG_SIMPLE_PRICE | lDecimalDifferenceRaw >> 8 | lRewardThreshold >> 16 | bytes32(aPrice);
     }
 
@@ -61,12 +61,12 @@ library RoutesLib {
     }
 
     function getPrice(bytes32 aData) internal pure returns (uint256 rPrice) {
-        rPrice = uint256(aData & 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
+        rPrice = uint256(aData & 0x00000000000000000000ffffffffffffffffffffffffffffffffffffffffffff);
     }
 
-    function getRewardThreshold(bytes32 aData) internal pure returns (uint16 rRewardThreshold) {
+    function getRewardThreshold(bytes32 aData) internal pure returns (uint64 rRewardThreshold) {
         rRewardThreshold =
-            uint16(uint256((aData & 0x0000ffff00000000000000000000000000000000000000000000000000000000) >> 224));
+            uint64(uint256((aData & 0x0000ffffffffffffffff00000000000000000000000000000000000000000000) >> 176));
     }
 
     function getTokenFirstWord(bytes32 aData) internal pure returns (address rToken) {

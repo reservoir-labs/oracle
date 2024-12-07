@@ -78,8 +78,8 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
             lRoute[3] = aTokenAAddress;
         }
 
-        uint16[] memory lRewardThresholds = new uint16[](3);
-        lRewardThresholds[0] = lRewardThresholds[1] = lRewardThresholds[2] = Constants.BP_SCALE;
+        uint64[] memory lRewardThresholds = new uint64[](3);
+        lRewardThresholds[0] = lRewardThresholds[1] = lRewardThresholds[2] = Constants.WAD;
 
         _oracle.setRoute(lRoute[0], lRoute[3], lRoute, lRewardThresholds);
         _writePriceCache(

@@ -14,6 +14,7 @@ library Utils {
 
     /// @dev Assumes that `aOriginal` and `aNew` is less than or equal to
     /// `Constants.MAX_SUPPORTED_PRICE`. So multiplication by 1e18 will not overflow.
+    /// 1e18 indicates a 100% difference. i.e. a doubling in price
     function calcPercentageDiff(uint256 aOriginal, uint256 aNew) internal pure returns (uint256) {
         unchecked {
             if (aOriginal == 0) return 0;

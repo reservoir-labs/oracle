@@ -56,7 +56,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         lDecimalDiff = lDecimalDiff == 0
             ? int256(uint256(IERC20(aToken1).decimals())) - int256(uint256(IERC20(aToken0).decimals()))
             : lDecimalDiff;
-        bytes32 lData = lDecimalDiff.packSimplePrice(aPrice, uint16(lRewardThreshold));
+        bytes32 lData = lDecimalDiff.packSimplePrice(aPrice, lRewardThreshold);
         require(lData.isSimplePrice(), "flag incorrect");
         require(lData.getDecimalDifference() == lDecimalDiff, "decimal diff incorrect");
         require(lData.getRewardThreshold() == lRewardThreshold, "reward threshold incorrect");
@@ -88,7 +88,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     function setUp() external {
         // define route
         address[] memory lRoute = new address[](2);
-        uint16[] memory lRewardThreshold = new uint16[](1);
+        uint64[] memory lRewardThreshold = new uint64[](1);
         lRoute[0] = address(_tokenA);
         lRoute[1] = address(_tokenB);
         lRewardThreshold[0] = 200; // 2%
@@ -160,8 +160,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         _writePriceCache(address(_tokenC), address(_tokenD), lPriceCD);
 
         address[] memory lRoute = new address[](4);
-        uint16[] memory lRewardThreshold = new uint16[](3);
-        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](3);
+        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.WAD;
 
         lRoute[0] = address(_tokenA);
         lRoute[1] = address(_tokenB);
@@ -190,8 +190,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         _writePriceCache(address(_tokenC), address(_tokenD), lPriceCD);
 
         address[] memory lRoute = new address[](4);
-        uint16[] memory lRewardThreshold = new uint16[](3);
-        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](3);
+        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.WAD;
         lRoute[0] = address(_tokenA);
         lRoute[1] = address(_tokenB);
         lRoute[2] = address(_tokenC);
@@ -233,8 +233,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         lRoute[2] = address(lTokenC);
 
         {
-            uint16[] memory lRewardThreshold = new uint16[](2);
-            lRewardThreshold[0] = lRewardThreshold[1] = Constants.BP_SCALE;
+            uint64[] memory lRewardThreshold = new uint64[](2);
+            lRewardThreshold[0] = lRewardThreshold[1] = Constants.WAD;
             _oracle.setRoute(address(lTokenA), address(lTokenC), lRoute, lRewardThreshold);
             _writePriceCache(address(lTokenA), address(lTokenB), 1e18);
             _writePriceCache(address(lTokenC), address(lTokenB), 1e18);
@@ -277,8 +277,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.designatePair(address(lTokenA), address(lTokenB), lPair);
 
         address[] memory lRoute = new address[](2);
-        uint16[] memory lRewardThreshold = new uint16[](1);
-        lRewardThreshold[0] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](1);
+        lRewardThreshold[0] = Constants.WAD;
         (lRoute[0], lRoute[1]) =
             lTokenA < lTokenB ? (address(lTokenA), address(lTokenB)) : (address(lTokenB), address(lTokenA));
         _oracle.setRoute(lRoute[0], lRoute[1], lRoute, lRewardThreshold);
@@ -339,8 +339,8 @@ contract ReservoirPriceOracleTest is BaseTest {
                 lTokenA < lTokenC ? (address(lTokenA), address(lTokenC)) : (address(lTokenC), address(lTokenA));
             lRoute[1] = address(lTokenB);
 
-            uint16[] memory lRewardThreshold = new uint16[](2);
-            lRewardThreshold[0] = lRewardThreshold[1] = Constants.BP_SCALE;
+            uint64[] memory lRewardThreshold = new uint64[](2);
+            lRewardThreshold[0] = lRewardThreshold[1] = Constants.WAD;
             _oracle.setRoute(lRoute[0], lRoute[2], lRoute, lRewardThreshold);
             _writePriceCache(
                 address(lTokenA) < address(lTokenB) ? address(lTokenA) : address(lTokenB),
@@ -493,7 +493,7 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testUpdatePrice_BelowThreshold(uint256 aPercentDiff) external {
         // assume
         (,, uint256 lRewardThreshold) = _oracle.priceCache(address(_tokenA), address(_tokenB));
-        uint256 lPercentDiff = bound(aPercentDiff, 0, (lRewardThreshold - 1) * WAD / Constants.BP_SCALE);
+        uint256 lPercentDiff = bound(aPercentDiff, 0, (lRewardThreshold - 1));
 
         // arrange - we fuzz test by varying the starting price instead of the new price
         uint256 lCurrentPrice = 98_918_868_099_219_913_512;
@@ -518,11 +518,10 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testUpdatePrice_AboveThresholdBelowMaxReward(uint256 aPercentDiff) external {
         // assume
         (,, uint256 lRewardThreshold) = _oracle.priceCache(address(_tokenA), address(_tokenB));
-        uint256 lRewardThresholdWAD = lRewardThreshold * WAD / Constants.BP_SCALE;
         uint256 lPercentDiff = bound(
             aPercentDiff,
-            lRewardThresholdWAD,
-            _oracle.MAX_REWARD_MULTIPLIER() * lRewardThreshold * WAD / Constants.BP_SCALE
+            lRewardThreshold,
+            _oracle.MAX_REWARD_MULTIPLIER() * lRewardThreshold
         );
 
         // arrange
@@ -541,7 +540,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         // assert
         (uint256 lPrice,,) = _oracle.priceCache(address(_tokenA), address(_tokenB));
         assertEq(lPrice, lCurrentPrice);
-        uint256 lExpectedRewardReceived = block.basefee * _oracle.rewardGasAmount() * lPercentDiff / lRewardThresholdWAD;
+        uint256 lExpectedRewardReceived = block.basefee * _oracle.rewardGasAmount() * lPercentDiff / lRewardThreshold;
         assertGe(lExpectedRewardReceived, block.basefee * _oracle.rewardGasAmount());
         assertLe(lExpectedRewardReceived, block.basefee * _oracle.rewardGasAmount() * _oracle.MAX_REWARD_MULTIPLIER());
         assertEq(address(this).balance, lExpectedRewardReceived); // some reward received but is less than max possible reward
@@ -553,7 +552,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         (,, uint256 lRewardThreshold) = _oracle.priceCache(address(_tokenA), address(_tokenB));
         uint256 lPercentDiff = bound(
             aPercentDiff,
-            _oracle.MAX_REWARD_MULTIPLIER() * lRewardThreshold * WAD / Constants.BP_SCALE,
+            _oracle.MAX_REWARD_MULTIPLIER() * lRewardThreshold,
             WAD // 100%
         );
 
@@ -649,7 +648,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lIntermediate2 = address(_tokenD);
         address lEnd = address(_tokenB);
         address[] memory lRoute = new address[](4);
-        uint16[] memory lRewardThreshold = new uint16[](3);
+        uint64[] memory lRewardThreshold = new uint64[](3);
         lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = 3; // 3bp
         lRoute[0] = lStart;
         lRoute[1] = lIntermediate1;
@@ -717,8 +716,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(_tokenB);
         address lToken1 = address(_tokenC);
         address[] memory lRoute = new address[](2);
-        uint16[] memory lRewardThreshold = new uint16[](1);
-        lRewardThreshold[0] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](1);
+        lRewardThreshold[0] = Constants.WAD;
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
 
@@ -741,8 +740,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(_tokenB);
         address lToken1 = address(_tokenC);
         address[] memory lRoute = new address[](4);
-        uint16[] memory lRewardThreshold = new uint16[](3);
-        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](3);
+        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.WAD;
         lRoute[0] = lToken0;
         lRoute[1] = address(_tokenA);
         lRoute[2] = address(_tokenD);
@@ -782,8 +781,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         lIntermediateRoute3[0] = lIntermediate2;
         lIntermediateRoute3[1] = lEnd;
 
-        uint16[] memory lRewardThreshold = new uint16[](3);
-        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](3);
+        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.WAD;
 
         // act
         vm.expectEmit(false, false, false, true);
@@ -810,8 +809,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(_tokenB);
         address lToken1 = address(_tokenC);
         address[] memory lRoute = new address[](2);
-        uint16[] memory lRewardThreshold = new uint16[](1);
-        lRewardThreshold[0] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](1);
+        lRewardThreshold[0] = Constants.WAD;
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
         _oracle.setRoute(lToken0, lToken1, lRoute, lRewardThreshold);
@@ -834,8 +833,8 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testClearRoute_AllWordsCleared() external {
         // arrange
         address[] memory lRoute = new address[](4);
-        uint16[] memory lRewardThreshold = new uint16[](3);
-        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](3);
+        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.WAD;
         lRoute[0] = address(_tokenA);
         lRoute[1] = address(_tokenC);
         lRoute[2] = address(_tokenB);
@@ -961,8 +960,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         lPair.sync();
 
         address[] memory lRoute = new address[](2);
-        uint16[] memory lRewardThreshold = new uint16[](1);
-        lRewardThreshold[0] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](1);
+        lRewardThreshold[0] = Constants.WAD;
         lRoute[0] = address(_tokenB);
         lRoute[1] = address(_tokenC);
 
@@ -981,7 +980,7 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testUpdatePrice_WriteToNonSimpleRoute() external {
         // arrange
-        uint16[] memory lRewardThresholds = new uint16[](2);
+        uint64[] memory lRewardThresholds = new uint64[](2);
         lRewardThresholds[0] = lRewardThresholds[1] = 1;
         address[] memory lRoute = new address[](3);
         lRoute[0] = address(_tokenA);
@@ -1021,8 +1020,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(0x1);
         address lToken1 = address(0x1);
         address[] memory lRoute = new address[](2);
-        uint16[] memory lRewardThreshold = new uint16[](1);
-        lRewardThreshold[0] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](1);
+        lRewardThreshold[0] = Constants.WAD;
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
 
@@ -1036,8 +1035,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(0x21);
         address lToken1 = address(0x2);
         address[] memory lRoute = new address[](2);
-        uint16[] memory lRewardThreshold = new uint16[](1);
-        lRewardThreshold[0] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](1);
+        lRewardThreshold[0] = Constants.WAD;
         lRoute[0] = lToken0;
         lRoute[1] = lToken1;
 
@@ -1051,8 +1050,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         address lToken0 = address(0x1);
         address lToken1 = address(0x2);
         address[] memory lTooLong = new address[](5);
-        uint16[] memory lRewardThreshold = new uint16[](1);
-        lRewardThreshold[0] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](1);
+        lRewardThreshold[0] = Constants.WAD;
         lTooLong[0] = lToken0;
         lTooLong[1] = address(0);
         lTooLong[2] = address(0);
@@ -1084,8 +1083,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         lInvalidRoute2[1] = address(54);
         lInvalidRoute2[2] = lToken1;
 
-        uint16[] memory lRewardThreshold = new uint16[](2);
-        lRewardThreshold[0] = lRewardThreshold[1] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](2);
+        lRewardThreshold[0] = lRewardThreshold[1] = Constants.WAD;
 
         // act & assert
         vm.expectRevert(OracleErrors.InvalidRoute.selector);
@@ -1097,8 +1096,8 @@ contract ReservoirPriceOracleTest is BaseTest {
     function testSetRoute_InvalidRewardThreshold() external {
         // arrange
         address[] memory lRoute = new address[](2);
-        uint16[] memory lInvalidRewardThreshold = new uint16[](1);
-        lInvalidRewardThreshold[0] = Constants.BP_SCALE + 1;
+        uint64[] memory lInvalidRewardThreshold = new uint64[](1);
+        lInvalidRewardThreshold[0] = Constants.WAD + 1;
         lRoute[0] = address(_tokenC);
         lRoute[1] = address(_tokenD);
 
@@ -1113,8 +1112,8 @@ contract ReservoirPriceOracleTest is BaseTest {
 
     function testSetRoute_InvalidRewardThresholdLength() external {
         address[] memory lRoute = new address[](2);
-        uint16[] memory lRewardThreshold = new uint16[](2);
-        lRewardThreshold[0] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](2);
+        lRewardThreshold[0] = Constants.WAD;
         lRoute[0] = address(_tokenC);
         lRoute[1] = address(_tokenD);
 
@@ -1129,8 +1128,8 @@ contract ReservoirPriceOracleTest is BaseTest {
         address[] memory lRoute = new address[](2);
         lRoute[0] = address(lToken) < address(_tokenA) ? address(lToken) : address(_tokenA);
         lRoute[1] = address(lToken) < address(_tokenA) ? address(_tokenA) : address(lToken);
-        uint16[] memory lRewardThreshold = new uint16[](1);
-        lRewardThreshold[0] = Constants.BP_SCALE;
+        uint64[] memory lRewardThreshold = new uint64[](1);
+        lRewardThreshold[0] = Constants.WAD;
 
         // act & assert
         vm.expectRevert(OracleErrors.UnsupportedTokenDecimals.selector);

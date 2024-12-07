@@ -207,21 +207,15 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         view
         returns (uint256 rReward)
     {
-        // SAFETY: this mul will not overflow as 0 < `aRewardThreshold` <= `Constants.BP_SCALE`, as checked by `setRoute`
-        uint256 lRewardThresholdWAD;
-        unchecked {
-            lRewardThresholdWAD = aRewardThreshold * Constants.WAD / Constants.BP_SCALE;
-        }
-
         uint256 lPercentDiff = aPrevPrice.calcPercentageDiff(aNewPrice);
 
         // SAFETY: this mul will not overflow even in extreme cases of `block.basefee`.
         unchecked {
-            if (lPercentDiff < lRewardThresholdWAD) {
+            if (lPercentDiff < aRewardThreshold) {
                 return 0;
             }
             // payout max reward
-            else if (lPercentDiff >= lRewardThresholdWAD * MAX_REWARD_MULTIPLIER) {
+            else if (lPercentDiff >= aRewardThreshold * MAX_REWARD_MULTIPLIER) {
                 // N.B. Revisit this whenever deployment on a new chain is needed
                 //
                 // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()`
@@ -230,7 +224,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
                 // congestion
                 rReward = block.basefee * rewardGasAmount * MAX_REWARD_MULTIPLIER;
             } else {
-                rReward = block.basefee * rewardGasAmount * lPercentDiff / lRewardThresholdWAD; // denominator is never 0
+                // denominator is never 0 as checked by `setRoute`
+                rReward = block.basefee * rewardGasAmount * lPercentDiff / aRewardThreshold;
             }
         }
     }
@@ -300,7 +295,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     // Calculate the storage slot for this intermediate segment and read it to see if there is an existing
     // route. If there isn't an existing route, we create one as well.
-    function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB, uint16 aBpMaxReward) private {
+    function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB, uint64 aBpMaxReward) private {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
         bytes32 lSlot = Utils.calculateSlot(lToken0, lToken1);
@@ -312,9 +307,9 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             address[] memory lIntermediateRoute = new address[](2);
             lIntermediateRoute[0] = lToken0;
             lIntermediateRoute[1] = lToken1;
-            uint16[] memory asd = new uint16[](1);
-            asd[0] = aBpMaxReward;
-            setRoute(lToken0, lToken1, lIntermediateRoute, asd);
+            uint64[] memory lRewardThreshold = new uint64[](1);
+            lRewardThreshold[0] = aBpMaxReward;
+            setRoute(lToken0, lToken1, lIntermediateRoute, lRewardThreshold);
         }
     }
 
@@ -488,7 +483,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken1 Address of the higher token.
     /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived.
     /// @param aRewardThresholds Array of basis points at and beyond which a reward is applicable for a price update.
-    function setRoute(address aToken0, address aToken1, address[] memory aRoute, uint16[] memory aRewardThresholds)
+    function setRoute(address aToken0, address aToken1, address[] memory aRoute, uint64[] memory aRewardThresholds)
         public
         onlyOwner
     {
@@ -511,7 +506,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
             uint256 lRewardThreshold = aRewardThresholds[0];
             require(
-                lRewardThreshold <= Constants.BP_SCALE && lRewardThreshold != 0, OracleErrors.InvalidRewardThreshold()
+                lRewardThreshold <= Constants.WAD && lRewardThreshold != 0, OracleErrors.InvalidRewardThreshold()
             );
 
             bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, lRewardThreshold);
