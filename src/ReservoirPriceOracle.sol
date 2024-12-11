@@ -295,6 +295,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     // Calculate the storage slot for this intermediate segment and read it to see if there is an existing
     // route. If there isn't an existing route, we create one as well.
+    // Will revert if it attempts to use an intermediate route that is not a simple route.
     function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB, uint64 aBpMaxReward) private {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
@@ -310,6 +311,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             uint64[] memory lRewardThreshold = new uint64[](1);
             lRewardThreshold[0] = aBpMaxReward;
             setRoute(lToken0, lToken1, lIntermediateRoute, lRewardThreshold);
+        } else {
+            require(lData.isSimplePrice(), OracleErrors.AttemptToUseCompositeRouteAsIntermediateRoute());
         }
     }
 

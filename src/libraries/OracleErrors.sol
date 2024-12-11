@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 /// @dev Collection of all oracle related errors.
 library OracleErrors {
     // config errors
+    error AttemptToUseCompositeRouteAsIntermediateRoute();
     error IncorrectTokensDesignatePair();
     error InvalidRewardThreshold();
     error InvalidRewardThresholdsLength();

@@ -98,7 +98,7 @@ contract ReservoirPriceOracleTest is BaseTest {
         _oracle.setRoute(address(_tokenA), address(_tokenB), lRoute, lRewardThreshold);
     }
 
-    function testName() external {
+    function testName() external view {
         // act & assert
         assertEq(_oracle.name(), "RESERVOIR PRICE ORACLE");
     }
@@ -809,6 +809,58 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(_oracle.route(lIntermediate2, lEnd), lIntermediateRoute3);
     }
 
+    function testSetRoute_ReplaceExistingCompositeWithSimple() external {
+        // arrange - set route A-B-C
+        address lStart = address(_tokenA);
+        address lIntermediate = address(_tokenB);
+        address lEnd = address(_tokenC);
+        address[] memory lRoute = new address[](3);
+        lRoute[0] = lStart;
+        lRoute[1] = lIntermediate;
+        lRoute[2] = lEnd;
+        uint64[] memory lRewardThreshold = new uint64[](2);
+        lRewardThreshold[0] = lRewardThreshold[1] = Constants.WAD;
+        _oracle.setRoute(lStart, lEnd, lRoute, lRewardThreshold);
+
+        // act - overwrite by A-C-D
+        _oracle.clearRoute(lStart, lEnd);
+        lRoute[1] = address(_tokenC);
+        lRoute[2] = address(_tokenD);
+
+        _oracle.setRoute(address(_tokenA), address(_tokenD), lRoute, lRewardThreshold);
+
+        // assert
+        address[] memory lRouteAC = new address[](2);
+        lRouteAC[0] = address(_tokenA);
+        lRouteAC[1] = address(_tokenC);
+
+        // intermediate routes are all intact
+        assertEq(_oracle.route(address(_tokenA), address(_tokenC)), lRouteAC);
+        assertEq(_oracle.route(address(_tokenA), address(_tokenD)), lRoute);
+        assertEq(_oracle.route(address(_tokenA), address(_tokenB)).length, 2);
+        assertEq(_oracle.route(address(_tokenB), address(_tokenC)).length, 2);
+        assertEq(_oracle.route(address(_tokenC), address(_tokenD)).length, 2);
+    }
+
+    function testSetRoute_ReplaceExistingSimpleWithComposite() external {
+        // arrange
+        address lStart = address(_tokenA);
+        address lIntermediate = address(_tokenC);
+        address lEnd = address(_tokenB);
+        address[] memory lRoute = new address[](3);
+        lRoute[0] = lStart;
+        lRoute[1] = lIntermediate;
+        lRoute[2] = lEnd;
+        uint64[] memory lRewardThreshold = new uint64[](2);
+        lRewardThreshold[0] = lRewardThreshold[1] = Constants.WAD;
+
+        // act - replace existing A-B with A-C-B
+        _oracle.setRoute(lStart, lEnd, lRoute, lRewardThreshold);
+
+        // assert
+        assertEq(_oracle.route(address(_tokenA), address(_tokenB)).length, 3);
+    }
+
     function testClearRoute() external {
         // arrange
         address lToken0 = address(_tokenB);
@@ -1144,6 +1196,36 @@ contract ReservoirPriceOracleTest is BaseTest {
             lRoute,
             lRewardThreshold
         );
+    }
+
+    // modified from test case supplied by Cantina auditors
+    function testSetRoute_OverwriteExisting_UsingCompositeAsIntermediate() external {
+        // arrange - set pair A/C with route [A->B->C]
+        address lStart = address(_tokenA);
+        address lIntermediate1 = address(_tokenB);
+        address lEnd = address(_tokenC);
+        address[] memory lRoute = new address[](3);
+        lRoute[0] = lStart;
+        lRoute[1] = lIntermediate1;
+        lRoute[2] = lEnd;
+        uint64[] memory lRewardThreshold = new uint64[](2);
+        lRewardThreshold[0] = lRewardThreshold[1] = Constants.WAD;
+        _oracle.setRoute(lStart, lEnd, lRoute, lRewardThreshold);
+
+        // Test if A/C slot contains 2-HOP route as expected
+        bytes32 AC_Slot = Utils.calculateSlot(address(_tokenA), address(_tokenC));
+        bytes32 AC_SlotValue = vm.load(address(_oracle), AC_Slot);
+        assertEq(AC_SlotValue.is2HopRoute(), true);
+
+        // act - Overwrite with pair A/D with route [A->C->D]
+        lEnd = address(_tokenD);
+        lRoute = new address[](3);
+        lRoute[0] = lStart;
+        lRoute[1] = address(_tokenC);
+        lRoute[2] = lEnd = address(_tokenD);
+
+        vm.expectRevert(OracleErrors.AttemptToUseCompositeRouteAsIntermediateRoute.selector);
+        _oracle.setRoute(lStart, lEnd, lRoute, lRewardThreshold);
     }
 
     function testUpdateRewardGasAmount_NotOwner() external {
