@@ -861,6 +861,36 @@ contract ReservoirPriceOracleTest is BaseTest {
         assertEq(_oracle.route(address(_tokenA), address(_tokenB)).length, 3);
     }
 
+    function testSetRoute_2ndSlotClearedWhenReplacing3HopByShorterRoute() external {
+        // arrange - set A-D-B-C
+        address[] memory lRoute = new address[](4);
+        address lStart = address(_tokenA);
+        address lIntermediate1 = address(_tokenD);
+        address lIntermediate2 = address(_tokenB);
+        address lEnd = address(_tokenC);
+        lRoute[0] = lStart;
+        lRoute[1] = lIntermediate1;
+        lRoute[2] = lIntermediate2;
+        lRoute[3] = lEnd;
+        uint64[] memory lRewardThreshold = new uint64[](3);
+        lRewardThreshold[0] = lRewardThreshold[1] = lRewardThreshold[2] = Constants.WAD;
+
+        _oracle.setRoute(lStart, lEnd, lRoute, lRewardThreshold);
+
+        // act - replace it by A-C
+        address[] memory lNewRoute = new address[](2);
+        lNewRoute[0] = address(_tokenA);
+        lNewRoute[1] = address(_tokenC);
+        uint64[] memory lNewRewardThreshold = new uint64[](1);
+        lNewRewardThreshold[0] = Constants.WAD;
+        _oracle.setRoute(address(_tokenA), address(_tokenC), lNewRoute, lNewRewardThreshold);
+
+        // assert
+        bytes32 lSecondSlot = bytes32(uint256(Utils.calculateSlot(address(_tokenA), address(_tokenC))) + 1);
+        bytes32 secondSlotValue = vm.load(address(_oracle), lSecondSlot);
+        assertEq(secondSlotValue, 0);
+    }
+
     function testClearRoute() external {
         // arrange
         address lToken0 = address(_tokenB);
