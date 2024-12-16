@@ -46,6 +46,10 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
         assumeNotForgeAddress(aTokenBAddress);
         assumeNotForgeAddress(aTokenCAddress);
         assumeNotForgeAddress(aTokenDAddress);
+        vm.assume(
+            aTokenAAddress != aTokenBAddress && aTokenAAddress != aTokenCAddress && aTokenAAddress != aTokenDAddress
+                && aTokenBAddress != aTokenCAddress && aTokenBAddress != aTokenDAddress && aTokenBAddress != aTokenDAddress
+        );
         uint256 lPrice1 = bound(aPrice1, 1e12, 1e24);
         uint256 lPrice2 = bound(aPrice2, 1e12, 1e24);
         uint256 lPrice3 = bound(aPrice3, 1e12, 1e24);
