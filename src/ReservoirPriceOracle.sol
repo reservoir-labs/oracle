@@ -48,17 +48,17 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     //                                        STORAGE                                            //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
+    // The following 3 storage variables take up 1 storage slot.
+
     /// @notice The PriceOracle to call if this router is not configured for base/quote.
     /// @dev If `address(0)` then there is no fallback.
     address public fallbackOracle;
-
-    // The following 2 storage variables take up 1 storage slot.
 
     /// @notice This number is multiplied by the base fee to determine the reward for keepers.
     uint64 public rewardGasAmount;
 
     /// @notice TWAP period (in seconds) for querying the oracle.
-    uint64 public twapPeriod;
+    uint16 public twapPeriod;
 
     /// @notice Designated pairs to serve as price feed for a certain token0 and token1.
     mapping(address token0 => mapping(address token1 => ReservoirPair pair)) public pairs;
@@ -67,7 +67,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     //                                CONSTRUCTOR, FALLBACKS                                     //
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    constructor(uint64 aTwapPeriod, uint64 aMultiplier, PriceType aType) {
+    constructor(uint16 aTwapPeriod, uint64 aMultiplier, PriceType aType) {
         updateTwapPeriod(aTwapPeriod);
         updateRewardGasAmount(aMultiplier);
         PRICE_TYPE = aType;
@@ -83,6 +83,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     // IPriceOracle
 
+    /// @inheritdoc IPriceOracle
     function name() external pure returns (string memory) {
         return "RESERVOIR PRICE ORACLE";
     }
@@ -103,6 +104,13 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     // price update related functions
 
+    /// @notice Returns the defined route between a given pair of tokens if there is one.
+    /// @param aToken0 Address of the lower token.
+    /// @param aToken1 Address of the higher token.
+    /// @return rRoute An array containing the tokens that make up the route.
+    /// Contains two elements if it is a simple route (A->B),
+    /// Contains three elements if it is a 2 hop route (A->B->C) and so on.
+    /// Returns an empty array if there is no route, or if the arg tokens are not sorted.
     function route(address aToken0, address aToken1) external view returns (address[] memory rRoute) {
         (rRoute,,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);
     }
@@ -115,7 +123,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken1 Address of the higher token.
     /// @return rPrice The cached price of aToken0/aToken1 for simple routes. Returns 0 for prices of composite routes.
     /// @return rDecimalDiff The difference in decimals as defined by aToken1.decimals() - aToken0.decimals(). Only valid for simple routes.
-    /// @return rRewardThreshold The number of basis points of difference in price at and beyond which a reward is applicable for a price update.
+    /// @return rRewardThreshold The difference in price in WAD at and beyond which a reward is applicable for a price update.
     function priceCache(address aToken0, address aToken1)
         external
         view
@@ -199,21 +207,15 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         view
         returns (uint256 rReward)
     {
-        // SAFETY: this mul will not overflow as 0 < `aRewardThreshold` <= `Constants.BP_SCALE`, as checked by `setRoute`
-        uint256 lRewardThresholdWAD;
-        unchecked {
-            lRewardThresholdWAD = aRewardThreshold * Constants.WAD / Constants.BP_SCALE;
-        }
-
         uint256 lPercentDiff = aPrevPrice.calcPercentageDiff(aNewPrice);
 
         // SAFETY: this mul will not overflow even in extreme cases of `block.basefee`.
         unchecked {
-            if (lPercentDiff < lRewardThresholdWAD) {
+            if (lPercentDiff < aRewardThreshold) {
                 return 0;
             }
             // payout max reward
-            else if (lPercentDiff >= lRewardThresholdWAD * MAX_REWARD_MULTIPLIER) {
+            else if (lPercentDiff >= aRewardThreshold * MAX_REWARD_MULTIPLIER) {
                 // N.B. Revisit this whenever deployment on a new chain is needed
                 //
                 // we use `block.basefee` instead of `ArbGasInfo::getMinimumGasPrice()`
@@ -222,10 +224,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
                 // congestion
                 rReward = block.basefee * rewardGasAmount * MAX_REWARD_MULTIPLIER;
             } else {
-                assert(
-                    lPercentDiff >= lRewardThresholdWAD && lPercentDiff < lRewardThresholdWAD * MAX_REWARD_MULTIPLIER
-                );
-                rReward = block.basefee * rewardGasAmount * lPercentDiff / lRewardThresholdWAD; // denominator is never 0
+                // denominator is never 0 as checked by `setRoute`
+                rReward = block.basefee * rewardGasAmount * lPercentDiff / aRewardThreshold;
             }
         }
     }
@@ -242,7 +242,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @return rRoute The route to determine the price between aToken0 and aToken1. Returns an empty array if there is no route.
     /// @return rDecimalDiff The result of token1.decimals() - token0.decimals() if it's a simple route. 0 otherwise.
     /// @return rPrice The price of aToken0/aToken1 if it's a simple route (i.e. rRoute.length == 2). 0 otherwise.
-    /// @return rRewardThreshold The number of basis points of difference in price at and beyond which a reward is applicable for a price update.
+    /// @return rRewardThreshold The difference in price in WAD at and beyond which a reward is applicable for a price update.
     function _getRouteDecimalDifferencePrice(address aToken0, address aToken1)
         private
         view
@@ -295,7 +295,8 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
     // Calculate the storage slot for this intermediate segment and read it to see if there is an existing
     // route. If there isn't an existing route, we create one as well.
-    function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB, uint16 aBpMaxReward) private {
+    // Will revert if it attempts to use an intermediate route that is not a simple route.
+    function _checkAndPopulateIntermediateRoute(address aTokenA, address aTokenB, uint64 aBpMaxReward) private {
         (address lToken0, address lToken1) = Utils.sortTokens(aTokenA, aTokenB);
 
         bytes32 lSlot = Utils.calculateSlot(lToken0, lToken1);
@@ -307,9 +308,11 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             address[] memory lIntermediateRoute = new address[](2);
             lIntermediateRoute[0] = lToken0;
             lIntermediateRoute[1] = lToken1;
-            uint16[] memory asd = new uint16[](1);
-            asd[0] = aBpMaxReward;
-            setRoute(lToken0, lToken1, lIntermediateRoute, asd);
+            uint64[] memory lRewardThreshold = new uint64[](1);
+            lRewardThreshold[0] = aBpMaxReward;
+            setRoute(lToken0, lToken1, lIntermediateRoute, lRewardThreshold);
+        } else {
+            require(lData.isSimplePrice(), OracleErrors.AttemptToUseCompositeRouteAsIntermediateRoute());
         }
     }
 
@@ -361,10 +364,12 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
             _getRouteDecimalDifferencePrice(lToken0, lToken1);
 
         if (lRoute.length == 0) {
-            // There is one case where the behavior is a bit more unexpected, and that is when
-            // `aBase` is an empty contract, and the revert would not be caught at all, causing
-            // the entire operation to fail. But this is okay, because if `aBase` is not a contract, trying
-            // to use the fallbackOracle would not yield any results anyway.
+            // There are two cases where the behavior is a bit more unexpected, and that is when:
+            // (1) `aBase` is an empty contract, and the revert would not be caught at all, causing
+            // the entire operation to fail.
+            // (2) an error happens when decoding the return data (specifically the return data length)
+            // But this is okay, because if `aBase` is not a contract or tries to return different types,
+            // trying to use the fallbackOracle would not yield any results anyway.
             // An alternative would be to use a low level `staticcall`.
             try IERC4626(aBase).asset() returns (address rBaseAsset) {
                 uint256 lResolvedAmountIn = IERC4626(aBase).convertToAssets(aAmount);
@@ -447,7 +452,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         emit FallbackOracleSet(aFallbackOracle);
     }
 
-    function updateTwapPeriod(uint64 aNewPeriod) public onlyOwner {
+    function updateTwapPeriod(uint16 aNewPeriod) public onlyOwner {
         require(aNewPeriod != 0 && aNewPeriod <= Constants.MAX_TWAP_PERIOD, OracleErrors.InvalidTwapPeriod());
 
         twapPeriod = aNewPeriod;
@@ -482,19 +487,26 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
     /// @param aToken0 Address of the lower token.
     /// @param aToken1 Address of the higher token.
     /// @param aRoute Path with which the price between aToken0 and aToken1 should be derived.
-    /// @param aRewardThresholds Array of basis points at and beyond which a reward is applicable for a price update.
-    function setRoute(address aToken0, address aToken1, address[] memory aRoute, uint16[] memory aRewardThresholds)
+    /// @param aRewardThresholds Array of reward thresholds in WAD and beyond which a reward is applicable for a price update.
+    function setRoute(address aToken0, address aToken1, address[] memory aRoute, uint64[] memory aRewardThresholds)
         public
         onlyOwner
     {
-        uint256 lRouteLength = aRoute.length;
-
         _validateTokens(aToken0, aToken1);
+
+        uint256 lRouteLength = aRoute.length;
         require(lRouteLength > 1 && lRouteLength <= Constants.MAX_ROUTE_LENGTH, OracleErrors.InvalidRouteLength());
         require(aRoute[0] == aToken0 && aRoute[lRouteLength - 1] == aToken1, OracleErrors.InvalidRoute());
         require(aRewardThresholds.length == lRouteLength - 1, OracleErrors.InvalidRewardThresholdsLength());
 
         bytes32 lSlot = Utils.calculateSlot(aToken0, aToken1);
+
+        bytes32 lSlotData;
+        assembly ("memory-safe") {
+            lSlotData := sload(lSlot)
+        }
+        // clear existing route first if there is one
+        if (lSlotData != 0) clearRoute(aToken0, aToken1);
 
         // simple route
         if (lRouteLength == 2) {
@@ -506,7 +518,7 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
 
             uint256 lRewardThreshold = aRewardThresholds[0];
             require(
-                lRewardThreshold <= Constants.BP_SCALE && lRewardThreshold != 0, OracleErrors.InvalidRewardThreshold()
+                lRewardThreshold <= Constants.WAD && lRewardThreshold != 0, OracleErrors.InvalidRewardThreshold()
             );
 
             bytes32 lData = RoutesLib.packSimplePrice(lDiff, 0, lRewardThreshold);
@@ -543,7 +555,10 @@ contract ReservoirPriceOracle is IPriceOracle, Owned(msg.sender), ReentrancyGuar
         emit Route(aToken0, aToken1, aRoute);
     }
 
-    function clearRoute(address aToken0, address aToken1) external onlyOwner {
+    /// @notice Clears the defined route and the corresponding storage slots.
+    /// @param aToken0 Address of the lower token.
+    /// @param aToken1 Address of the higher token.
+    function clearRoute(address aToken0, address aToken1) public onlyOwner {
         _validateTokens(aToken0, aToken1);
 
         (address[] memory lRoute,,,) = _getRouteDecimalDifferencePrice(aToken0, aToken1);

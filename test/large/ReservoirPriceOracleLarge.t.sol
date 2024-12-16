@@ -31,12 +31,24 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
     ) external {
         // assume
         vm.assume(
-            aTokenAAddress > ADDRESS_THRESHOLD && aTokenBAddress > ADDRESS_THRESHOLD
-                && aTokenCAddress > ADDRESS_THRESHOLD && aTokenDAddress > ADDRESS_THRESHOLD
+            aTokenAAddress.code.length == 0 && aTokenBAddress.code.length == 0 && aTokenCAddress.code.length == 0
+                && aTokenCAddress.code.length == 0
         );
+        assumeNotPrecompile(aTokenAAddress);
+        assumeNotPrecompile(aTokenBAddress);
+        assumeNotPrecompile(aTokenCAddress);
+        assumeNotPrecompile(aTokenDAddress);
+        assumeNotZeroAddress(aTokenAAddress);
+        assumeNotZeroAddress(aTokenBAddress);
+        assumeNotZeroAddress(aTokenCAddress);
+        assumeNotZeroAddress(aTokenDAddress);
+        assumeNotForgeAddress(aTokenAAddress);
+        assumeNotForgeAddress(aTokenBAddress);
+        assumeNotForgeAddress(aTokenCAddress);
+        assumeNotForgeAddress(aTokenDAddress);
         vm.assume(
-            _addressSet.add(aTokenAAddress) && _addressSet.add(aTokenBAddress) && _addressSet.add(aTokenCAddress)
-                && _addressSet.add(aTokenDAddress)
+            aTokenAAddress != aTokenBAddress && aTokenAAddress != aTokenCAddress && aTokenAAddress != aTokenDAddress
+                && aTokenBAddress != aTokenCAddress && aTokenBAddress != aTokenDAddress && aTokenBAddress != aTokenDAddress
         );
         uint256 lPrice1 = bound(aPrice1, 1e12, 1e24);
         uint256 lPrice2 = bound(aPrice2, 1e12, 1e24);
@@ -78,8 +90,8 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
             lRoute[3] = aTokenAAddress;
         }
 
-        uint16[] memory lRewardThresholds = new uint16[](3);
-        lRewardThresholds[0] = lRewardThresholds[1] = lRewardThresholds[2] = Constants.BP_SCALE;
+        uint64[] memory lRewardThresholds = new uint64[](3);
+        lRewardThresholds[0] = lRewardThresholds[1] = lRewardThresholds[2] = Constants.WAD;
 
         _oracle.setRoute(lRoute[0], lRoute[3], lRoute, lRewardThresholds);
         _writePriceCache(

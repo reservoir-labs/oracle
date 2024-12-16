@@ -36,17 +36,17 @@ contract RoutesLibTest is Test {
         assertEq(lZero.getDecimalDifference(), 0);
     }
 
-    function testPackSimplePrice(int8 aDiff, uint256 aPrice) external pure {
+    function testPackSimplePrice(int8 aDiff, uint64 aRewardThreshold, uint256 aPrice) external pure {
         // assume
-        uint256 lPrice = bound(aPrice, 1, 1e36);
+        uint256 lPrice = bound(aPrice, 1, Constants.MAX_SUPPORTED_PRICE);
 
         // act
-        bytes32 lResult = int256(aDiff).packSimplePrice(lPrice, Constants.BP_SCALE);
+        bytes32 lResult = int256(aDiff).packSimplePrice(lPrice, aRewardThreshold);
 
         // assert
         assertEq(lResult[0], RoutesLib.FLAG_SIMPLE_PRICE);
         assertEq(lResult[1], bytes1(uint8(aDiff)));
-        assertEq(lResult.getRewardThreshold(), Constants.BP_SCALE);
+        assertEq(lResult.getRewardThreshold(), aRewardThreshold);
         assertEq(lResult.getPrice(), lPrice);
     }
 }
