@@ -92,7 +92,7 @@ viewable issues for suspected security vulnerabilities.
 
 ## Audits
 
-These contracts have been audited by TBD and TBD auditing firm.
+These contracts have been [audited](audits/) by Cantina in December 2024.
 
 ## License
 
