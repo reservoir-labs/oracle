@@ -3,9 +3,7 @@
 /out
 
 # Ignores development broadcast logs
-!/broadcast
-/broadcast/*/31337/
-/broadcast/**/dry-run/
+/broadcast
 
 # Docs
 docs/
@@ -13,12 +11,12 @@ docs/
 # Dotenv file
 .env
 
-# slither 
+# slither
 /slither-report.md
 
 # typechain
 /typings
 
-# node 
+# node
 /node_modules
 
