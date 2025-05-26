@@ -84,6 +84,11 @@ npm run lint
 
 Separate `.solhint.json` files exist for `src/` and `test/`.
 
+## Dev Notes
+
+1. `via-ir` is not enabled this repo, as somehow it increases the gas usage for
+most cases.
+
 ## Security vulnerability disclosure
 
 Please report suspected security vulnerabilities in private to
