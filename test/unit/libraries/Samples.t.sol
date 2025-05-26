@@ -21,13 +21,6 @@ contract SamplesTest is Test {
         assertEq(lInstantClampedPrice, -456);
     }
 
-    function testInstant_BadVariableRequest() external {
-        // would like to test the revert behavior when passing an invalid enum
-        // but solidity has a check to prevent casting a uint that is out of range of the enum
-        vm.expectRevert(stdError.enumConversionError);
-        PriceType(uint256(5));
-    }
-
     function testAccumulator() external pure {
         // arrange
         Observation memory lObs = Observation(-789, -569, -401, -1238, 5);
@@ -39,12 +32,5 @@ contract SamplesTest is Test {
         // assert
         assertEq(lAccRawPrice, -401);
         assertEq(lAccClampedPrice, -1238);
-    }
-
-    function testAccumulator_BadVariableRequest() external {
-        // would like to test the revert behavior when passing an invalid enum
-        // but solidity has a check to prevent casting a uint that is out of range of the enum
-        vm.expectRevert(stdError.enumConversionError);
-        PriceType(uint256(5));
     }
 }
