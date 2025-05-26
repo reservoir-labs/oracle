@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.10;
 
-import { PriceType } from "src/Enums.sol";
 import "forge-std/Script.sol";
+
+import { PriceType } from "src/Enums.sol";
 import { ReservoirPriceOracle } from "src/ReservoirPriceOracle.sol";
 
 contract DeployScript is Script {
