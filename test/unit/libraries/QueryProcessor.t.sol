@@ -12,10 +12,7 @@ contract QueryProcessorTest is BaseTest {
 
     QueryProcessorWrapper internal _queryProcessor = new QueryProcessorWrapper();
 
-    constructor() {
-        _factory.write("Shared::oracleCaller", address(_queryProcessor));
-        _pair.updateOracleCaller();
-    }
+    constructor() {}
 
     // TODO: test both negative and positive acc values
     // i.e. accumulator value keeps getting more negative and more positive
