@@ -16,13 +16,13 @@ contract DeployScript is Script {
         vm.startBroadcast();
 
         // Deploy ReservoirPriceOracle
-        // as we specify a salt, the script will use the canonical `CREATE2_FACTORY` for the respective chain
-        _oracle = new ReservoirPriceOracle{salt: bytes32(0)}(DEFAULT_TWAP_PERIOD, DEFAULT_MULTIPLIER, DEFAULT_PRICE_TYPE);
+        _oracle = new ReservoirPriceOracle(DEFAULT_TWAP_PERIOD, DEFAULT_MULTIPLIER, DEFAULT_PRICE_TYPE);
 
         vm.stopBroadcast();
 
         require(_oracle.twapPeriod() == DEFAULT_TWAP_PERIOD, "TWAP Period");
         require(_oracle.rewardGasAmount() == DEFAULT_MULTIPLIER, "Multiplier");
         require(_oracle.PRICE_TYPE() == DEFAULT_PRICE_TYPE, "PriceType");
+        require(_oracle.owner() == msg.sender, "Owner");
     }
 }
