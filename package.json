@@ -47,6 +47,7 @@
     "prettier:fix": "prettier --write '**/*.json'",
     "prettier:list": "prettier --list-different '**/*.json'",
     "reinstall": "rm -rf node_modules package-lock.json && npm install",
+    "setRoute:arb": "forge script script/SetRoute.s.sol --target-contract SetRoute --fork-url https://arb1.arbitrum.io/rpc --broadcast -vvvv --ledger --mnemonic-derivation-paths \"m/44'/60'/0'/0/1\" --sender 0x2508b97B8041960ccA8AaBC7662F07EC8e285F6d",
     "slither": "npm run slither:check",
     "slither:check": "slither .",
     "slither:triage": "slither . --triage-mode",
