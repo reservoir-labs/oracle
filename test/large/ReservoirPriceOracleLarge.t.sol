@@ -30,25 +30,13 @@ contract ReservoirPriceOracleLargeTest is ReservoirPriceOracleTest {
         uint8 aTokenDDecimal
     ) external {
         // assume
-        vm.assume(
-            aTokenAAddress.code.length == 0 && aTokenBAddress.code.length == 0 && aTokenCAddress.code.length == 0
-                && aTokenCAddress.code.length == 0
-        );
-        assumeNotPrecompile(aTokenAAddress);
-        assumeNotPrecompile(aTokenBAddress);
-        assumeNotPrecompile(aTokenCAddress);
-        assumeNotPrecompile(aTokenDAddress);
-        assumeNotZeroAddress(aTokenAAddress);
-        assumeNotZeroAddress(aTokenBAddress);
-        assumeNotZeroAddress(aTokenCAddress);
-        assumeNotZeroAddress(aTokenDAddress);
-        assumeNotForgeAddress(aTokenAAddress);
-        assumeNotForgeAddress(aTokenBAddress);
-        assumeNotForgeAddress(aTokenCAddress);
-        assumeNotForgeAddress(aTokenDAddress);
+        assumeUnusedAddress(aTokenAAddress);
+        assumeUnusedAddress(aTokenBAddress);
+        assumeUnusedAddress(aTokenCAddress);
+        assumeUnusedAddress(aTokenDAddress);
         vm.assume(
             aTokenAAddress != aTokenBAddress && aTokenAAddress != aTokenCAddress && aTokenAAddress != aTokenDAddress
-                && aTokenBAddress != aTokenCAddress && aTokenBAddress != aTokenDAddress && aTokenBAddress != aTokenDAddress
+                && aTokenBAddress != aTokenCAddress && aTokenBAddress != aTokenDAddress && aTokenCAddress != aTokenDAddress
         );
         uint256 lPrice1 = bound(aPrice1, 1e12, 1e24);
         uint256 lPrice2 = bound(aPrice2, 1e12, 1e24);

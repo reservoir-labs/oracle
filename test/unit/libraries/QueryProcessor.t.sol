@@ -12,10 +12,7 @@ contract QueryProcessorTest is BaseTest {
 
     QueryProcessorWrapper internal _queryProcessor = new QueryProcessorWrapper();
 
-    constructor() {
-        _factory.write("Shared::oracleCaller", address(_queryProcessor));
-        _pair.updateOracleCaller();
-    }
+    constructor() {}
 
     // TODO: test both negative and positive acc values
     // i.e. accumulator value keeps getting more negative and more positive
@@ -179,15 +176,15 @@ contract QueryProcessorTest is BaseTest {
         uint16 lObservationsToWrite = uint16(bound(aObservationsToWrite, 3, Buffer.SIZE * 3)); // go around it 3 times maximum
 
         // arrange
-        uint256 lStartTime = block.timestamp;
+        uint256 lStartTime = vm.getBlockTimestamp();
         _fillBuffer(lBlockTime, lObservationsToWrite);
         (,,, uint16 lIndex) = _pair.getReserves();
 
         // act
         vm.startPrank(address(_queryProcessor));
         uint256 lAgo = lObservationsToWrite > Buffer.SIZE
-            ? block.timestamp - _pair.observation(lIndex.next()).timestamp
-            : block.timestamp - (lStartTime + lBlockTime);
+            ? vm.getBlockTimestamp() - _pair.observation(lIndex.next()).timestamp
+            : vm.getBlockTimestamp() - (lStartTime + lBlockTime);
         int256 lAcc = _queryProcessor.getPastAccumulator(_pair, PriceType.RAW_PRICE, lIndex, lAgo);
 
         // assert
@@ -215,7 +212,7 @@ contract QueryProcessorTest is BaseTest {
         vm.startPrank(address(_queryProcessor));
         Observation memory lPrevObs = _pair.observation(lRandomSlot);
         uint256 lWantedTimestamp = lPrevObs.timestamp + lBlockTime / 2;
-        uint256 lAgo = block.timestamp - lWantedTimestamp;
+        uint256 lAgo = vm.getBlockTimestamp() - lWantedTimestamp;
         int256 lAcc = _queryProcessor.getPastAccumulator(_pair, PriceType.RAW_PRICE, lIndex, lAgo);
 
         // assert
@@ -323,7 +320,7 @@ contract QueryProcessorTest is BaseTest {
 
         // act
         (Observation memory prev, Observation memory next) =
-            _queryProcessor.findNearestSample(_pair, block.timestamp, 0, 1);
+            _queryProcessor.findNearestSample(_pair, vm.getBlockTimestamp(), 0, 1);
 
         // assert
         assertEq(prev.timestamp, next.timestamp);
@@ -403,7 +400,7 @@ contract QueryProcessorTest is BaseTest {
         vm.prank(address(_queryProcessor));
         uint256 lAgo = bound(
             aAgo,
-            block.timestamp - _pair.observation(lOldestSample).timestamp + 1,
+            vm.getBlockTimestamp() - _pair.observation(lOldestSample).timestamp + 1,
             aStartTime + lBlockTime * lObservationsToWrite
         );
 

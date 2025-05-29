@@ -259,13 +259,9 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint8 aTokenBDecimal
     ) external {
         // assume
-        vm.assume(aTokenAAddress.code.length == 0 && aTokenBAddress.code.length == 0);
-        assumeNotPrecompile(aTokenAAddress);
-        assumeNotPrecompile(aTokenBAddress);
-        assumeNotZeroAddress(aTokenAAddress);
-        assumeNotZeroAddress(aTokenBAddress);
-        assumeNotForgeAddress(aTokenAAddress);
-        assumeNotForgeAddress(aTokenBAddress);
+        assumeUnusedAddress(aTokenAAddress);
+        assumeUnusedAddress(aTokenBAddress);
+        vm.assume(aTokenAAddress != aTokenBAddress);
         uint256 lPrice = bound(aPrice, 1, 1e36);
         uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
         uint256 lTokenADecimal = bound(aTokenADecimal, 0, 18);
@@ -311,16 +307,12 @@ contract ReservoirPriceOracleTest is BaseTest {
         uint8 aTokenCDecimal
     ) external {
         // assume
-        vm.assume(aTokenAAddress.code.length == 0 && aTokenBAddress.code.length == 0 && aTokenCAddress.code.length == 0);
-        assumeNotPrecompile(aTokenAAddress);
-        assumeNotPrecompile(aTokenBAddress);
-        assumeNotPrecompile(aTokenCAddress);
-        assumeNotZeroAddress(aTokenAAddress);
-        assumeNotZeroAddress(aTokenBAddress);
-        assumeNotZeroAddress(aTokenCAddress);
-        assumeNotForgeAddress(aTokenAAddress);
-        assumeNotForgeAddress(aTokenBAddress);
-        assumeNotForgeAddress(aTokenCAddress);
+        assumeUnusedAddress(aTokenAAddress);
+        assumeUnusedAddress(aTokenBAddress);
+        assumeUnusedAddress(aTokenCAddress);
+        vm.assume(aTokenAAddress != aTokenBAddress);
+        vm.assume(aTokenAAddress != aTokenCAddress);
+        vm.assume(aTokenBAddress != aTokenCAddress);
         uint256 lPrice1 = bound(aPrice1, 1e9, 1e25); // need to bound price within this range as a price below this will go to zero as during the mul and div of prices
         uint256 lPrice2 = bound(aPrice2, 1e9, 1e25);
         uint256 lAmtIn = bound(aAmtIn, 0, 1_000_000_000);
