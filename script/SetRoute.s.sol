@@ -7,7 +7,7 @@ import { PriceType } from "src/Enums.sol";
 import { ReservoirPriceOracle } from "src/ReservoirPriceOracle.sol";
 
 contract SetRoute is Script {
-    ReservoirPriceOracle constant internal _oracle = ReservoirPriceOracle(payable(0x0e20047f33e6b39Ff2c7c9f2aC0388BbCa20B646));
+    ReservoirPriceOracle constant internal _oracle = ReservoirPriceOracle(payable(0xD54B3cFE18E2b16A96D93254A6fDC8c5123411EC));
     address constant internal USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address constant internal USDT = 0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9;
     uint256 constant internal _threshold = 0.0002e18; // 0.02% or 2bp
